@@ -38,12 +38,13 @@ path{2,1} = fullfile(path{1},'MATLAB');
 % Set required subdirectories
 path{5,1} = fullfile(path{3},'Data');
 path{6,1} = fullfile(path{3},'Functions');
-path{7,1} = fullfile(path{3},'Results','LEICA');
-path{8,1} = fullfile(path{3},'Results','EC');
+path{7,1} = fullfile(path{3},'LEICA','Functions');
+path{8,1} = fullfile(path{3},'Results','LEICA');
 
 % Add relevant paths
 addpath(genpath(pwd));
 addpath(genpath(path{6,1}));
+addpath(genpath(path{7,1}));
 
 
 %% Set file names & load data
@@ -52,7 +53,7 @@ addpath(genpath(path{6,1}));
 loadFile = 'LEICA90_CIC_Assemblies';
 
 % Load data
-load(fullfile(path{7}, loadFile));
+load(fullfile(path{8}, loadFile));
 
 % File to save
 S = strsplit(loadFile, '_');
@@ -106,9 +107,6 @@ T.dt = 0.1*T.TR/2;
 % Noise parameters
 dsig = sqrt(T.dt)*0.02;		% set amplitude for Gaussian random noise
 
-% Spatial parameters
-a = -0.05*ones(N.ROI, 2);
-
 % Set narrowband filter
 [bfilt, afilt] = narrowband(T.TR);
 params.filt.bfilt = bfilt;
@@ -119,10 +117,11 @@ params.filt.afilt = afilt;
 
 % Preallocate EC matrices
 EC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);	% EC matrices
-alpha = nan(N.ROI, max(N.subjects), N.conditions);			% bifurcation parameters
+alpha = nan(N.ROI, max(N.subjects), N.conditions);		% bifurcation parameters
+fval = nan(max(N.subjects), N.conditions);				% KS distances
 
 % Generate initial values
-a = -0.0*ones(1,N.ROI);
+a = -0.05*ones(1,N.ROI);
 vC = reshape(C, [1, N.ROI^2]);
 xinit = horzcat(a, vC);
 clear a vC
@@ -139,22 +138,23 @@ for c = 1:N.conditions
 		activation = squeeze(activities.subj.TS{s,c});
 		
 		% Set optimization parameters
-		lb = -ones(1, N.ROI^2);		% sets lower connectivity bound to -G
-		ub = ones(1, N.ROI^2);		% sets upper connectivity bound to G
-		initpop = (G/10)*randn(20, N.ROI*(1+N.ROI))+repmat(xinit,20,1);	% sets initial value(s) for connectivity matrix
+		nvars = N.ROI*(1+N.ROI);
+		lb = -G*ones(1, N.ROI^2);		% sets lower connectivity bound to -G
+		ub = G*ones(1, N.ROI^2);		% sets upper connectivity bound to G
+		initpop = (G/10)*randn(40, nvars)+repmat(xinit,40,1);	% sets initial value(s) for connectivity matrix
 		options = optimoptions('particleswarm', 'InitialSwarmMatrix',initpop, 'MaxTime',2700000, 'Display','iter');
 		
 		% Optimize connectivity for each condition
-		[x, fval] = particleswarm(@NLDhopf, N.ROI^2, lb, ub, options);
+		[x, fval(s,c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
 		display(['Optimized EC fval: ', num2str(fval)]);
 		
 		% Repopulate connectivity matrix with optimized values
-		alpha(:,s,c) = x(1:N.ROI);
+		alpha(:,s,c) = x(1:N.ROI)';
 		eC = reshape(x(N.ROI+1:end), [N.ROI, N.ROI]);
-		EC(:,:,s,c) = eC; clear eC
+		EC(:,:,s,c) = eC;
 	end
 end
-clear x i j s c a ng nn omega lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90 EC
+clear x i j s c a ng nn omega lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90 eC
 
 
 

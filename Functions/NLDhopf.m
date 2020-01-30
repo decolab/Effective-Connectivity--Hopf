@@ -9,7 +9,8 @@ global activation dsig bfilt afilt W N T omega;
 %% Setup
 
 % Repopulate connectivity matrix
-a = x(1:N.ROI);
+a = x(1:N.ROI)';
+a = repmat(a, [1,2]);
 wC = reshape(x(N.ROI+1:end), [N.ROI, N.ROI]);
 
 
