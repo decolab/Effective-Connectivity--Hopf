@@ -117,12 +117,8 @@ params.filt.afilt = afilt;
 %% Compute EC, a per subject
 
 % Preallocate EC matrices
-EC = zeros(N.ROI, N.ROI);	% EC matrices
-
-% Set design matrix
-I = zeros(sum(N.subjects), N.conditions);
-I(1:N.subjects(1), 1) = 1;
-I(1+N.subjects(1):sum(N.subjects), 2) = 1;
+EffC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);	% EC matrices
+alpha = nan(N.ROI, max(N.subjects), N.conditions);			% bifurcation parameters
 
 % Vectorize structural connectivity
 xinit = reshape(Cnorm, [1, N.ROI^2]);
@@ -152,6 +148,7 @@ for c = 1:N.conditions
 		
 		% Repopulate connectivity matrix with optimized values
 		EC = reshape(x, [N.ROI, N.ROI]);
+		EffC(:,:,s,c) = EC;
 % 		nn=0;
 % 		for i = 1:N.ROI
 % 			for j = 1:N.ROI
@@ -170,11 +167,11 @@ for c = 1:N.conditions
         options = optimoptions('particleswarm', 'InitialSwarmMatrix',initpop, 'MaxTime',2700000, 'Display','iter');
 
         % Optimize bifurcation parameter for each condition
-        [~, fval] = particleswarm(@NLDhopf_a, N.ROI, lb, ub, options);
+        [alpha(:,s,c), fval] = particleswarm(@NLDhopf_a, N.ROI, lb, ub, options);
         display(['Optimized a fval: ', num2str(fval)]);
 	end
 end
-clear x i j s c a ng nn omega lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90
+clear x i j s c a ng nn omega lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90 EC
 
 
 
