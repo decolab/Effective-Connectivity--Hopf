@@ -3,13 +3,14 @@ function fval = NLDhopf(x)
 
 
 %% Load parameters
-global activation G dsig bfilt afilt C a W N T omega;
+global activation dsig bfilt afilt W N T omega;
 
 
 %% Setup
 
 % Repopulate connectivity matrix
-wC = reshape(x, [N.ROI, N.ROI]);
+a = x(1:N.ROI);
+wC = reshape(x(N.ROI+1:end), [N.ROI, N.ROI]);
 
 
 %% Run nonlinear Hopf model

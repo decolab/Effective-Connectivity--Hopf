@@ -19,7 +19,7 @@
 clear; close all; clc;
 
 % Set global variables
-global activation dsig bfilt afilt EC C a W N T omega G c;
+global activation dsig bfilt afilt W N T omega;
 
 
 %% Set paths & directories
@@ -42,7 +42,8 @@ path{7,1} = fullfile(path{3},'Results','LEICA');
 path{8,1} = fullfile(path{3},'Results','EC');
 
 % Add relevant paths
-addpath(genpath(path{6}));
+addpath(genpath(pwd));
+addpath(genpath(path{6,1}));
 
 
 %% Set file names & load data
@@ -86,7 +87,7 @@ G = 0.2;				% global coupling weight
 % Set structural connectivity (why?)
 C = load(fullfile(path{5}, 'sc90.mat'));
 C = C.sc90;
-Cnorm = C/max(max(C))*G;
+C = C/max(max(C))*G;
 
 
 %% Set parameters
@@ -117,18 +118,20 @@ params.filt.afilt = afilt;
 %% Compute EC, a per subject
 
 % Preallocate EC matrices
-EffC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);	% EC matrices
+EC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);	% EC matrices
 alpha = nan(N.ROI, max(N.subjects), N.conditions);			% bifurcation parameters
 
-% Vectorize structural connectivity
-xinit = reshape(Cnorm, [1, N.ROI^2]);
+% Generate initial values
+a = -0.0*ones(1,N.ROI);
+vC = reshape(C, [1, N.ROI^2]);
+xinit = horzcat(a, vC);
+clear a vC
 
-% Optimize each subject
+% Optimize alpha and connectivity in each subject
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
-		%% Compute effective connectivity per subject
 		disp(['Computing EC for condition ',num2str(c), ', subject ', num2str(s)])
-        
+		
 		% Compute omega (intrinsic frequency per node) per condition
 		omega = findomega_subj(dFC.subj{s,c}, N.ROI, T, afilt, bfilt);
 		
@@ -136,9 +139,8 @@ for c = 1:N.conditions
 		activation = squeeze(activities.subj.TS{s,c});
 		
 		% Set optimization parameters
-		% lb = zeros(1, nvars);		% sets lower connectivity bound to zero (cannot have negative connectivity)
-		lb = -G*ones(1, N.ROI^2);		% sets lower connectivity bound to -G
-		ub = G*ones(1, N.ROI^2);		% sets upper connectivity bound to G
+		lb = -ones(1, N.ROI^2);		% sets lower connectivity bound to -G
+		ub = ones(1, N.ROI^2);		% sets upper connectivity bound to G
 		initpop = (G/10)*randn(20,N.ROI^2)+repmat(xinit,20,1);	% sets initial value(s) for connectivity matrix
 		options = optimoptions('particleswarm', 'InitialSwarmMatrix',initpop, 'MaxTime',2700000, 'Display','iter');
 		
@@ -147,28 +149,9 @@ for c = 1:N.conditions
 		display(['Optimized EC fval: ', num2str(fval)]);
 		
 		% Repopulate connectivity matrix with optimized values
-		EC = reshape(x, [N.ROI, N.ROI]);
-		EffC(:,:,s,c) = EC;
-% 		nn=0;
-% 		for i = 1:N.ROI
-% 			for j = 1:N.ROI
-% 				nn = nn+1;
-% 				EC(i,j) = x(nn);
-% 			end
-% 		end
-
-
-        %% Compute a per subject
-
-        % Set optimization parameters
-        lb = -ones(1, N.ROI);		% sets lower connectivity bound to -1
-        ub = ones(1, N.ROI);		% sets upper connectivity bound to 1
-        initpop = (G/10)*randn(2*20, N.ROI)+repmat(a',20,1);	% sets initial value(s) for connectivity matrix
-        options = optimoptions('particleswarm', 'InitialSwarmMatrix',initpop, 'MaxTime',2700000, 'Display','iter');
-
-        % Optimize bifurcation parameter for each condition
-        [alpha(:,s,c), fval] = particleswarm(@NLDhopf_a, N.ROI, lb, ub, options);
-        display(['Optimized a fval: ', num2str(fval)]);
+		alpha(:,s,c) = x(1:N.ROI);
+		eC = reshape(x(N.ROI+1:end), [N.ROI, N.ROI]);
+		EC(:,:,s,c) = eC; clear eC
 	end
 end
 clear x i j s c a ng nn omega lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90 EC
