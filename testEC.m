@@ -141,7 +141,7 @@ for c = 1:N.conditions
 		% Set optimization parameters
 		lb = -ones(1, N.ROI^2);		% sets lower connectivity bound to -G
 		ub = ones(1, N.ROI^2);		% sets upper connectivity bound to G
-		initpop = (G/10)*randn(20,N.ROI^2)+repmat(xinit,20,1);	% sets initial value(s) for connectivity matrix
+		initpop = (G/10)*randn(20, N.ROI*(1+N.ROI))+repmat(xinit,20,1);	% sets initial value(s) for connectivity matrix
 		options = optimoptions('particleswarm', 'InitialSwarmMatrix',initpop, 'MaxTime',2700000, 'Display','iter');
 		
 		% Optimize connectivity for each condition
