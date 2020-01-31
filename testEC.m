@@ -121,7 +121,7 @@ alpha = nan(N.ROI, max(N.subjects), N.conditions);		% bifurcation parameters
 fval = nan(max(N.subjects), N.conditions);				% KS distances
 
 % Generate initial values
-a = -0.05*ones(1,N.ROI);
+a = -0.0*ones(1,N.ROI);
 vC = reshape(C, [1, N.ROI^2]);
 xinit = horzcat(a, vC);
 clear a vC
@@ -141,7 +141,7 @@ for c = 1:N.conditions
 		nvars = N.ROI*(1+N.ROI);
 		lb = -G*ones(1, N.ROI^2);		% sets lower connectivity bound to -G
 		ub = G*ones(1, N.ROI^2);		% sets upper connectivity bound to G
-		initpop = (G/10)*randn(40, nvars)+repmat(xinit,40,1);	% sets initial value(s) for connectivity matrix
+		initpop = (G/20)*randn(40, nvars)+repmat(xinit,40,1);	% sets initial value(s) for connectivity matrix
 		options = optimoptions('particleswarm', 'InitialSwarmMatrix',initpop, 'MaxTime',2700000, 'Display','iter');
 		
 		% Optimize connectivity for each condition
@@ -150,11 +150,10 @@ for c = 1:N.conditions
 		
 		% Repopulate connectivity matrix with optimized values
 		alpha(:,s,c) = x(1:N.ROI)';
-		eC = reshape(x(N.ROI+1:end), [N.ROI, N.ROI]);
-		EC(:,:,s,c) = eC;
+		EC(:,:,s,c) = reshape(x(N.ROI+1:end), [N.ROI, N.ROI]);
 	end
 end
-clear x i j s c a ng nn omega lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90 eC
+clear x i j s c a ng nn omega lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries
 
 
 

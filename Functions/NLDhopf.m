@@ -9,8 +9,7 @@ global activation dsig bfilt afilt W N T omega;
 %% Setup
 
 % Repopulate connectivity matrix
-a = x(1:N.ROI)';
-a = repmat(a, [1,2]);
+a = repmat(x(1:N.ROI)', [1,2]);
 wC = reshape(x(N.ROI+1:end), [N.ROI, N.ROI]);
 
 
@@ -23,7 +22,7 @@ z = 0.1*ones(N.ROI, 2);
 BOLD = hopf(z, wC, a, omega, dsig, T, N.ROI);
 
 % Compute connectivity
-[~, timeserietotal] = phasesync(BOLD, N.ROI, T.scan, bfilt, afilt);
+[~, timeserietotal, ~, ~] = phasesync(BOLD, N.ROI, T.scan, bfilt, afilt);
 
 % compute simulated assembly activations
 projection =  W*timeserietotal;
