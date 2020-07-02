@@ -3,7 +3,7 @@ function fval = NLDhopf(x)
 
 
 %% Load parameters
-global activation dsig bfilt afilt W N T omega;
+global activation dsig bfilt afilt W N T omega co;
 
 
 %% Setup
@@ -30,12 +30,21 @@ projection =  W*timeserietotal;
 
 %% Compute KS distance between simulated & empirical assembly activations
 
-% compute KS distance
-ksdist = nan(N.assemblies, 1);
+% compute entropy, mean KS distance between assembly distributions
+entro = nan(N.assemblies, 2);
+% ksdist = nan(N.assemblies, 1);
 for ass = 1:N.assemblies
-	[~, ~, ksdist(ass)] = kstest2(activation(ass,:), projection(ass,:));
+	% Compute entropy of each assembly
+	entro(ass, 1) = HShannon_kNN_k_estimation(activation(ass,:), co);
+	entro(ass, 2) = HShannon_kNN_k_estimation(projection(ass,:), co);
+	
+	% Compute KS distance between assembly activation distributions
+	%[~, ~, ksdist(ass)] = kstest2(activation(ass,:), projection(ass,:));
 end
+% fval = mean(ksdist);	% mean KS distance between activtion distributions
 
-% Compute mean of KS distance
-fval = mean(ksdist);
+% Use KS distance between entropy distributiosn as cost function
+[~, ~, fval] = kstest2(entro(:,1), entro(:,2));
+
+% Display cost function
 % display(['Current KS Distance: ', num2str(fval)]);
