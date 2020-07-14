@@ -19,7 +19,7 @@
 clear; close all; clc;
 
 % Set global variables
-global activation dsig bfilt afilt C a W N T omega G c;
+global activation dsig bfilt afilt C a W N T omega G co;
 
 
 %% Set paths & directories
@@ -37,26 +37,25 @@ path{2,1} = fullfile(path{1},'MATLAB');
 
 % Set required subdirectories
 path{5,1} = fullfile(path{3},'Data');
-path{6,1} = fullfile(path{3},'Functions');
-path{7,1} = fullfile(path{3},'Results','LEICA');
-path{8,1} = fullfile(path{3},'Results','EC');
+path{6,1} = fullfile(path{3},'Results','LEICA');
+path{7,1} = fullfile(path{3},'Results','EC');
+path{8,1} = fullfile(path{3},'Functions');
+path{9,1} = fullfile(path{3},'LEICA','Functions');
+path{10,1} = fullfile(path{4},'Functions');
 
 % Add relevant paths
-addpath(genpath(path{6}));
+addpath(genpath(path{8}));
+addpath(genpath(path{9}));
+addpath(genpath(path{10}));
 
 
 %% Set file names & load data
 
 % Define files to load
-loadFile = 'LEICA90_CIC_Assemblies';
+loadFile = 'MICA90_CIC_EXP_Iteration1';
 
 % Load data
-load(fullfile(path{7}, loadFile));
-
-% File to save
-S = strsplit(loadFile, '_');
-fileName = strcat(S{1}, '_', S{2}, '_EC');
-clear loadFile S
+load(fullfile(path{6}, loadFile));
 
 % Reset N.fig
 N.fig = 1;
@@ -64,18 +63,25 @@ N.fig = 1;
 
 %% Reset paths & directories
 
+clear path;
+
 % Find general path (enclosing folder of current directory)
 path{1} = strsplit(pwd, '/');
 path{3,1} = strjoin(path{1}(1:end-1),'/');
 path{4,1} = strjoin(path{1}, '/');
 path{1,1} = strjoin(path{1}(1:end-2),'/');
 path{2,1} = fullfile(path{1},'MATLAB');
-
-% Set required subdirectories
 path{5,1} = fullfile(path{3},'Data');
 path{6,1} = fullfile(path{3},'Results','LEICA');
-path{7,1} = fullfile(path{4},'Functions');
-path{8,1} = fullfile(path{3},'Results','EC');
+path{7,1} = fullfile(path{3},'Results','EC');
+
+% File to save
+S = strsplit(loadFile, '_');
+fileName = strcat(S{1}, '_', S{2}, '_EC');
+fList = dir(fullfile(path{7}, strcat(fileName, '_*')));		% Get file list
+nIter = numel(fList);										% Find number of previous iterations
+fileName = strcat(fileName, '_Iteration', num2str(nIter));	% Edit fileName
+clear loadFile S nIter fList
 
 
 %% Compute structural connectivity
@@ -86,7 +92,7 @@ G = 0.2;				% global coupling weight
 % Set structural connectivity (why?)
 C = load(fullfile(path{5}, 'sc90.mat'));
 C = C.sc90;
-Cnorm = C/max(max(C))*G;
+Cnorm = C/max(C,[],'all','omitnan')*G;
 
 
 %% Set parameters
@@ -156,7 +162,7 @@ for c = 1:N.conditions
 		omega = findomega_subj(dFC.subj{s,c}, N.ROI, T, afilt, bfilt);
 
 		% Set activation
-		activation = squeeze(activities.subj.TS{s,c});
+		activation = squeeze(activities.subj{s,c});
 
 		% Optimize connectivity for each condition
 		[x, fval(s,c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
@@ -166,7 +172,7 @@ for c = 1:N.conditions
 		nn=0;
 		for i = 1:N.ROI
 			for j = 1:N.ROI
-				if (C(i,j)>0 || j == N.ROI-i+1)
+				if (C(i,j)>0 || j == N.ROI-i+1)	% enforces finite values on anti-diagonal
 					nn = nn+1;
 					EC(i,j,c,s) = x(nn);
 				end
@@ -177,7 +183,7 @@ end
 clear x i j s c a ng nn omega lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90
 
 % Save results
-save(fullfile(path{8}, fileName));
+save(fullfile(path{7}, fileName));
 
 
 %% Display EC of controls, OCD
@@ -196,6 +202,6 @@ end
 clear C
 
 % Save figure
-savefig(F, fullfile(path{8}, fileName));
+savefig(F, fullfile(path{7}, fileName));
 clear F
 
