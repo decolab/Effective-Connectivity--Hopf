@@ -55,7 +55,7 @@ for ass = 1:N.IC
 	% Compute KS distance between assembly activation distributions
 	%[~, ~, ksdist(ass)] = kstest2(activation(ass,:), projection(ass,:));
 end
-% fval = mean(ksdist);	% mean KS distance between activtion distributions
+% fval = mean(ksdist);	% mean KS distance between activation distributions
 
 % Use difference between sum of entropies as cost function
 fval = sum(entro, 1, 'omitnan');

@@ -19,7 +19,7 @@
 clear; close all; clc;
 
 % Set global variables
-global activation dsig bfilt afilt C a W N T omega G co;
+global activation dsig bfilt afilt C a W N T omega G co ftype;
 
 
 %% Set paths & directories
@@ -52,10 +52,14 @@ addpath(genpath(path{10}));
 %% Set file names & load data
 
 % Define files to load
-loadFile = 'MICA90_CIC_EXP_Iteration1';
+loadFile = 'ICA90_CIC_COS_Iteration1';
 
 % Load data
-load(fullfile(path{6}, loadFile));
+load(fullfile(path{6}, loadFile), 'activities','co','W','T','N', 'labels','dFC');
+S = strsplit(loadFile, '_');
+ftype.compress = S{1}(1:end-2);
+ftype.ic = S{2};
+ftype.dist = S{3};
 
 % Reset N.fig
 N.fig = 1;
@@ -76,7 +80,6 @@ path{6,1} = fullfile(path{3},'Results','LEICA');
 path{7,1} = fullfile(path{3},'Results','EC');
 
 % File to save
-S = strsplit(loadFile, '_');
 fileName = strcat(S{1}, '_', S{2}, '_EC');
 fList = dir(fullfile(path{7}, strcat(fileName, '_*')));		% Get file list
 nIter = numel(fList);										% Find number of previous iterations
@@ -193,13 +196,22 @@ F = figure;
 
 % Display EC for each condition
 for c = 1:N.conditions
-	subplot(1, N.conditions, c);
+	
+	% Plot mean EC of each condition
+	subplot(2, N.conditions, c);
 	xlim([1 N.ROI]);
 	ylim([1 N.ROI]);
-	imagesc(mean(squeeze(EC(:,:,c,:)), 3)); colorbar;
+	imagesc(mean(squeeze(EC(:,:,c,1:N.subjects(c))), 3)); colorbar;
 	title(['Mean EC of ', condName{c}]);
+	
+	% Plot standard deviation EC of each condition
+	subplot(2, N.conditions, N.conditions+c);
+	xlim([1 N.ROI]);
+	ylim([1 N.ROI]);
+	imagesc(std(squeeze(EC(:,:,c,1:N.subjects(c))), [], 3)); colorbar;
+	title(['Standard Deviation of ', condName{c}, ' EC']);
 end
-clear C
+clear c
 
 % Save figure
 savefig(F, fullfile(path{7}, fileName));
