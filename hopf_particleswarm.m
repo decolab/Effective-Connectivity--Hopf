@@ -19,7 +19,7 @@
 clear; close all; clc;
 
 % Set global variables
-global activation dsig bfilt afilt C a W N T omega G co ftype;
+global activation dsig bfilt afilt C a W N T omega G co aType;
 
 
 %% Set paths & directories
@@ -52,14 +52,10 @@ addpath(genpath(path{10}));
 %% Set file names & load data
 
 % Define files to load
-loadFile = 'ICA90_CIC_COS_Iteration1';
+loadFile = 'LEICA90_CIC_COS_Iteration3';
 
 % Load data
-load(fullfile(path{6}, loadFile), 'activities','co','W','T','N', 'labels','dFC');
-S = strsplit(loadFile, '_');
-ftype.compress = S{1}(1:end-2);
-ftype.ic = S{2};
-ftype.dist = S{3};
+load(fullfile(path{6}, loadFile), 'activities','co','W','T','N', 'labels','dFC', 'aType');
 
 % Reset N.fig
 N.fig = 1;
@@ -80,6 +76,7 @@ path{6,1} = fullfile(path{3},'Results','LEICA');
 path{7,1} = fullfile(path{3},'Results','EC');
 
 % File to save
+S = strsplit(loadFile, '_');
 fileName = strcat(S{1}, '_', S{2}, '_EC');
 fList = dir(fullfile(path{7}, strcat(fileName, '_*')));		% Get file list
 nIter = numel(fList);										% Find number of previous iterations

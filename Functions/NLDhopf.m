@@ -3,7 +3,7 @@ function fval = NLDhopf(x)
 
 
 %% Load parameters
-global activation dsig bfilt afilt C W N T omega co a;
+global activation dsig bfilt afilt C W N T omega co a aType;
 
 
 %% Setup
@@ -35,11 +35,11 @@ z = 0.1*ones(N.ROI, 2);
 % initialize z (move past initial transients)
 BOLD = hopf(z, wC, a, omega, dsig, T, N.ROI);
 
-% Compute connectivity
-[~, timeserietotal, ~, ~] = phasesync(BOLD, N.ROI, T.scan, bfilt, afilt);
+% Compute dFC
+[~, dFCsim] = phasesync(BOLD, N.ROI, T.scan, bfilt, afilt, aType);
 
 % compute simulated assembly activations
-projection =  W*timeserietotal;
+projection =  W*dFCsim;
 
 
 %% Compute KS distance between simulated & empirical assembly activations
