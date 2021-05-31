@@ -19,7 +19,16 @@
 clear; close all; clc;
 
 % Set global variables
-global activation dsig bfilt afilt C a W N T omega G co aType;
+global activation entro dsig bfilt afilt C a W N T omega G co aType cfType;
+
+% Define file to analyze
+fileName = 'LEICA90_CIC_COS_WideBand_k1_Iteration2';
+
+% Set EC type to compute
+tofit = 'IC';			% 'ROI' to fit by region, 'ICA' to fit by assembly
+typeoffit = 'Subject with Group Prior';
+mecDist = 'seuclidean';
+cfType = 'eucEntro';
 
 
 %% Set paths & directories
@@ -36,52 +45,53 @@ path{1,1} = strjoin(path{1}(1:end-2),'/');
 path{2,1} = fullfile(path{1},'MATLAB');
 
 % Set required subdirectories
-path{5,1} = fullfile(path{3},'Data');
-path{6,1} = fullfile(path{3},'Results','LEICA');
-path{7,1} = fullfile(path{3},'Results','EC');
-path{8,1} = fullfile(path{3},'Functions');
-path{9,1} = fullfile(path{3},'LEICA','Functions');
-path{10,1} = fullfile(path{4},'Functions');
+path{5,1} = fullfile(path{3},'OCD','Data');
+path{6,1} = fullfile(path{3},'OCD','Results','LEICA');
+path{7,1} = fullfile(path{3},'OCD','Results','EC');
 
 % Add relevant paths
-addpath(genpath(path{8}));
-addpath(genpath(path{9}));
-addpath(genpath(path{10}));
+fpath{1,1} = fullfile(path{3},'Functions');
+fpath{2,1} = fullfile(path{3},'LEICA','Functions');
+fpath{3,1} = fullfile(path{4},'Functions');
+for k = 1:numel(fpath)
+	addpath(genpath(fpath{k}));
+end
+clear fpath k
 
 
 %% Set file names & load data
 
-% Define files to load
-loadFile = 'LEICA90_CIC_COS_Iteration3';
-
 % Load data
-load(fullfile(path{6}, loadFile), 'activities','co','W','T','N', 'labels','dFC', 'aType');
+e = load(fullfile(path{6}, fileName), 'activities', 'entro','memberships','co','W','T','N', 'labels','dFC', 'aType');
+activities = e.activities;
+sEntro = e.entro;
+memberships = e.memberships;
+co = e.co;
+W = e.W;
+T = e.T;
+N = e.N;
+N.comp = N.IC; N = rmfield(N, 'IC');
+labels = e.labels;
+dFC = e.dFC;
+aType = e.aType;
+clear e
+
+% Load network labels
+label_AAL90 = load(fullfile(path{3}, 'Atlases', 'AAL', 'AAL_labels'));
+label_AAL90 = string(label_AAL90.label90);
+label_AAL90 = strip(LR_version_symm(label_AAL90));
 
 % Reset N.fig
 N.fig = 1;
 
-
-%% Reset paths & directories
-
-clear path;
-
-% Find general path (enclosing folder of current directory)
-path{1} = strsplit(pwd, '/');
-path{3,1} = strjoin(path{1}(1:end-1),'/');
-path{4,1} = strjoin(path{1}, '/');
-path{1,1} = strjoin(path{1}(1:end-2),'/');
-path{2,1} = fullfile(path{1},'MATLAB');
-path{5,1} = fullfile(path{3},'Data');
-path{6,1} = fullfile(path{3},'Results','LEICA');
-path{7,1} = fullfile(path{3},'Results','EC');
-
 % File to save
-S = strsplit(loadFile, '_');
-fileName = strcat(S{1}, '_', S{2}, '_EC');
 fList = dir(fullfile(path{7}, strcat(fileName, '_*')));		% Get file list
 nIter = numel(fList);										% Find number of previous iterations
-fileName = strcat(fileName, '_Iteration', num2str(nIter));	% Edit fileName
-clear loadFile S nIter fList
+if nIter == 0
+	nIter = 1;
+end
+fileName = strcat(fileName, '_EC_', cfType, '_Iteration', num2str(nIter));
+clear nIter fList
 
 
 %% Compute structural connectivity
@@ -102,9 +112,6 @@ if ~exist('condName', 'var')
 	condName = labels.Properties.VariableNames;
 end
 
-% Determine whether to fit ROIs or ICA components
-tofit = 'ICA';  % 'ROI' to fit by region, 'ICA' to fit by assembly
-
 % Temporal parameters
 T.dt = 0.1*T.TR/2;
 
@@ -120,12 +127,7 @@ params.filt.bfilt = bfilt;
 params.filt.afilt = afilt;
 
 
-%% Compute effective connectivity per subject
-
-% Preallocate EC matrices
-EC = zeros(N.ROI, N.ROI, N.conditions, max(N.subjects));	% EC matrices
-alpha = nan(N.ROI, 2, N.conditions, max(N.subjects));		% bifurcation parameters
-fval = nan(max(N.subjects), N.conditions);		% cost function
+%% Compute effective connectivity
 
 % Set design matrix
 I = zeros(sum(N.subjects), N.conditions);
@@ -151,66 +153,297 @@ ub = G*ones(1, nvars);		% sets upper connectivity bound to G
 initpop = (G/10)*randn(20,nvars)+repmat(xinit,20,1);	% sets initial value(s) for connectivity matrix
 options = optimoptions('particleswarm', 'InitialSwarmMatrix',initpop, 'MaxTime',90000, 'Display','iter');
 
-% Compute EC per condition
-for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		
-		% Display current status
-		disp(['Computing EC of condition ', num2str(c),  ', subject ', num2str(s), '.']);
-		
-		% Compute omega (intrinsic frequency per node) per condition
-		omega = findomega_subj(dFC.subj{s,c}, N.ROI, T, afilt, bfilt);
 
-		% Set activation
-		activation = squeeze(activities.subj{s,c});
+% Switch between fitting methods
+switch typeoffit
+	case 'Subject'
+		% Preallocate EC matrices
+		EC = nan(N.ROI, N.ROI, N.conditions, max(N.subjects));	% EC matrices
+		alpha = nan(N.ROI, 2, N.conditions, max(N.subjects));		% bifurcation parameters
+		fval = nan(max(N.subjects), N.conditions);		% cost function
 
-		% Optimize connectivity for each condition
-		[x, fval(s,c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
-		display(['Optimized Particle Swarm: ', num2str(fval(s,c))]);
+		% Compute EC per subject
+		for c = 1:N.conditions
+			for s = 1:N.subjects(c)
 
-		% Repopulate connectivity matrix with optimized values
-		nn=0;
-		for i = 1:N.ROI
-			for j = 1:N.ROI
-				if (C(i,j)>0 || j == N.ROI-i+1)	% enforces finite values on anti-diagonal
-					nn = nn+1;
-					EC(i,j,c,s) = x(nn);
+				% Display current status
+				disp(['Computing EC of condition ', num2str(c),  ', subject ', num2str(s), '.']);
+
+				% Compute omega (intrinsic frequency per node) per condition
+				omega = findomega_subj(dFC.subj{s,c}, N.ROI, T, afilt, bfilt);
+
+				% Set activation
+				entro = squeeze(sEntro.IC(:,s,c));
+				activation = squeeze(activities.subj{s,c});
+
+				% Optimize connectivity for each condition
+				[x, fval(s,c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
+				display(['Optimized Particle Swarm: ', num2str(fval(s,c))]);
+
+				% Repopulate connectivity matrix with optimized values
+				nn=0;
+				for i = 1:N.ROI
+					for j = 1:N.ROI
+						if (C(i,j)>0 || j == N.ROI-i+1)	% enforces finite values on anti-diagonal
+							nn = nn+1;
+							EC(i,j,c,s) = x(nn);
+						end
+					end
 				end
 			end
 		end
-	end
+		
+	case 'Group Mean'
+		% Preallocate EC matrices
+		EC = zeros(N.ROI, N.ROI, N.conditions);		% EC matrices
+		alpha = nan(N.ROI, 2, N.conditions);		% bifurcation parameters
+		fval = nan(N.conditions, 1);				% cost function
+		
+		% Compute mean entropy & activation
+		for c = 1:N.conditions
+			
+			% Extract relevant entropy, activations
+			entro = sEntro.mIC{:,condName{c}};
+			activation = squeeze(activities.cond{c});
+			
+			% Display current status
+			disp(['Computing EC of condition ', num2str(c),  '.']);
+			
+			% Compute omega (intrinsic frequency per node) per condition
+			omega = nan(N.ROI, 2, N.subjects(c));
+			for s = 1:N.subjects(c)
+				omega(:,:,s) = findomega_subj(dFC.subj{s,c}, N.ROI, T, afilt, bfilt);
+			end
+			omega = squeeze(mean(omega, 3, 'omitnan'));
+
+			% Optimize connectivity for each condition
+			[x, fval(c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
+			display(['Optimized Particle Swarm: ', num2str(fval(c))]);
+
+			% Repopulate connectivity matrix with optimized values
+			nn=0;
+			for i = 1:N.ROI
+				for j = 1:N.ROI
+					if (C(i,j)>0 || j == N.ROI-i+1)	% enforces finite values on anti-diagonal
+						nn = nn+1;
+						EC(i,j,c) = x(nn);
+					end
+				end
+			end
+		end
+		clear nn i j s c
+		
+	case 'Subject with Group Prior'
+		% Preallocate EC matrices
+		EC = zeros(N.ROI, N.ROI, N.conditions, max(N.subjects));	% EC matrices
+		alpha = nan(N.ROI, 2, N.conditions, max(N.subjects));		% bifurcation parameters
+		fval = nan(max(N.subjects), N.conditions);		% cost function
+
+		% Compute priors
+		for c = 1:N.conditions
+			
+			% Extract relevant entropy, activations
+			entro = sEntro.mIC{:,condName{c}};
+			
+			% Display current status
+			disp(['Computing prior for condition ', num2str(c),  '.']);
+			
+			% Compute omega (intrinsic frequency per node) per condition
+			omega = nan(N.ROI, 2, N.subjects(c));
+			for s = 1:N.subjects(c)
+				omega(:,:,s) = findomega_subj(dFC.subj{s,c}, N.ROI, T, afilt, bfilt);
+			end
+			omega = squeeze(mean(omega, 3, 'omitnan'));
+			
+			% Set activation, entropy
+			activation = squeeze(activities.cond{c});
+			entro = squeeze(sEntro.mIC{:,condName{c}});
+
+			% Optimize connectivity for each condition
+			[x, fval(c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
+			display(['Optimized Particle Swarm: ', num2str(fval(c))]);
+			
+			% Find number of nonzero connections, approximate structural connectivity
+			% per condition
+			nvars = 0;		% number of nonzero connections
+			for i = 1:N.ROI
+				for j=1:N.ROI
+					if (C(i,j)>0 || j == N.ROI-i+1)
+						nvars = nvars+1;
+						xinit(1,nvars) = x(nvars);
+					end
+				end
+			end
+			clear i j
+
+			% Set optimization parameters
+			lb = zeros(1, nvars);		% sets lower connectivity bound to zero (cannot have negative connectivity)
+			ub = G*ones(1, nvars);		% sets upper connectivity bound to G
+			initpop = (G/10)*randn(20,nvars)+repmat(xinit,20,1);	% sets initial value(s) for connectivity matrix
+			options = optimoptions('particleswarm', 'InitialSwarmMatrix',initpop, 'MaxTime',90000, 'Display','iter');
+			
+			% Compute EC for each subject
+			for s = 1:N.subjects(c)
+
+				% Display current status
+				disp(['Computing EC of condition ', num2str(c),  ', subject ', num2str(s), '.']);
+
+				% Compute omega (intrinsic frequency per node) per condition
+				omega = findomega_subj(dFC.subj{s,c}, N.ROI, T, afilt, bfilt);
+
+				% Set activation
+				activation = squeeze(activities.subj{s,c});
+				entro = squeeze(sEntro.IC(:,s,c));
+
+				% Optimize connectivity for each condition
+				[x, fval(s,c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
+				display(['Optimized Particle Swarm: ', num2str(fval(s,c))]);
+
+				% Repopulate connectivity matrix with optimized values
+				nn=0;
+				for i = 1:N.ROI
+					for j = 1:N.ROI
+						if (C(i,j)>0 || j == N.ROI-i+1)	% enforces finite values on anti-diagonal
+							nn = nn+1;
+							EC(i,j,c,s) = x(nn);
+						end
+					end
+				end
+			end
+		end
 end
-clear x i j s c a ng nn omega lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90
+clear x i j s c a ng nn omega entro lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90
 
 % Save results
-save(fullfile(path{7}, fileName));
+% save(fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName));
 
 
 %% Display EC of controls, OCD
 
-% Open figure
-F = figure;
+switch typeoffit
+	case {'Subject', 'Subject with Group Prior'}
+		
+		% Preallocate arrays
+		mEC = nan(N.ROI, N.ROI, N.conditions);
+		sEC = nan(N.ROI, N.ROI, N.conditions);
+		
+		% Display mean EC for each condition
+		F(1) = figure;
+		for c = 1:N.conditions
+			
+			% Compute mean, standard deviation of EC per group
+			mEC(:,:,c) = mean(squeeze(EC(:,:,c, 1:N.subjects(c))), 3, 'omitnan');
+			sEC(:,:,c) = std(squeeze(EC(:,:,c, 1:N.subjects(c))), [], 3, 'omitnan');
+			
+			% Plot mean EC of each condition
+			subplot(2, N.conditions, 2*c-1); colormap jet
+			imagesc(mEC(:,:,c)); colorbar;
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			title(['Mean of ', condName{c}]);
+			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			pbaspect([1 1 1]);
 
-% Display EC for each condition
-for c = 1:N.conditions
-	
-	% Plot mean EC of each condition
-	subplot(2, N.conditions, c);
-	xlim([1 N.ROI]);
-	ylim([1 N.ROI]);
-	imagesc(mean(squeeze(EC(:,:,c,1:N.subjects(c))), 3)); colorbar;
-	title(['Mean EC of ', condName{c}]);
-	
-	% Plot standard deviation EC of each condition
-	subplot(2, N.conditions, N.conditions+c);
-	xlim([1 N.ROI]);
-	ylim([1 N.ROI]);
-	imagesc(std(squeeze(EC(:,:,c,1:N.subjects(c))), [], 3)); colorbar;
-	title(['Standard Deviation of ', condName{c}, ' EC']);
+			% Plot standard deviation EC of each condition
+			subplot(2, N.conditions, 2*c); colormap jet
+			imagesc(sEC(:,:,c)); colorbar;
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			title(['Standard Deviation of ', condName{c}]);
+			yticks([]); xticks([]); pbaspect([1 1 1]);
+		end
+		sgtitle('Effective Connectivity');
+		clear c
+
+		% Display distance between mean ECs
+		F(2) = figure;
+		combs = nchoosek(1:N.conditions, 2);
+		for c = 1:size(combs, 1)
+			k(1) = combs(c,1); k(2) = combs(c,2);
+			
+			% Plot mean
+			subplot(size(combs,1), 2, c); colormap jet
+			imagesc(pdist2(squeeze(mEC(:,:,k(1))), squeeze(mEC(:,:,k(2))), mecDist)); colorbar;
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			title(['Mean: ', condName{k(1)}, ' vs. ' condName{k(2)}]);
+			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			pbaspect([1 1 1]);
+			
+			% Plot standard deviation
+			subplot(size(combs,1), 2, 2*c); colormap jet
+			imagesc(pdist2(squeeze(sEC(:,:,k(1))), squeeze(sEC(:,:,k(2))), mecDist)); colorbar;
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			title(['Standard Deviation: ', condName{k(1)}, ' vs. ' condName{k(2)}]);
+			yticks([]); xticks([]);
+			pbaspect([1 1 1]);
+		end
+		sgtitle('Distances between Summary Statistics');
+
+		% Display mean distance between ECs
+		F(3) = figure;
+		combs = nchoosek(1:N.conditions, 2);
+		for c = 1:size(combs, 1)
+			k(1) = combs(c,1); k(2) = combs(c,2);
+			scomb = nchoosek(1:sum(N.subjects(k)), 2);
+			scomb(scomb(:,2)<=N.subjects(k(1)),:) = [];
+			scomb(scomb(:,1)>N.subjects(k(1)),:) = [];
+			scomb(:,2) = scomb(:,2) - N.subjects(k(1));
+			d = nan(N.ROI, N.ROI, size(scomb,1));
+			
+			for s = 1:size(scomb, 1)
+				d(:,:,s) = pdist2(squeeze(EC(:,:, scomb(s,1))), squeeze(EC(:,:, scomb(s,2))), mecDist);
+			end
+			
+			% Plot mean of distance
+			subplot(size(combs,1), 2, c); colormap jet
+			imagesc(mean(d, 3, 'omitnan')); colorbar;
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			title(['Mean: ' condName{k(1)} ' vs. ' condName{k(2)}]);
+			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			pbaspect([1 1 1]);
+			
+			% Plot standard deviation of distance
+			subplot(size(combs,1), 2, c+1); colormap jet
+			imagesc(std(d, 0, 3, 'omitnan')); colorbar;
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			title(['Standard Deviation: ' condName{k(1)} ' vs. ' condName{k(2)}]);
+			yticks([]); xticks([]); pbaspect([1 1 1]);
+		end
+		sgtitle('Summary Statistics of Distances');
+		
+	case 'Group Mean'
+		% Display mean EC for each condition
+		F(1) = figure;
+		for c = 1:N.conditions
+			subplot(1, N.conditions, c);
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			colormap jet
+			imagesc(squeeze(EC(:,:,c))); colorbar;
+			title(['EC of ', condName{c}, ' Mean Entropy']);
+			yticks(1:N.ROI); yticklabels(label_AAL90);
+			pbaspect([1 1 1]);
+		end
+		clear c
+
+		% Display distance mean differences between ECs in each condition
+		F(2) = figure;
+		combs = nchoosek(1:N.conditions, 2);
+		for c = 1:size(combs, 1)
+			subplot(1, size(combs,1), c);
+			k(1) = combs(c,1); k(2) = combs(c,2);
+			mdist = abs(squeeze(EC(:,:,k(1))) - squeeze(EC(:,:,k(2))));	% pdist2(squeeze(EC(:,:,k(1))), squeeze(EC(:,:,k(2))), mecDist);
+
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			colormap jet
+			imagesc(mdist); colorbar;
+			title(['Distance between Mean EC of Conditions ', num2str(k(1)), ' and ' num2str(k(2))]);
+			yticks(1:N.ROI); yticklabels(label_AAL90);
+			pbaspect([1 1 1]);
+		end
 end
-clear c
+clear k s d c m
 
 % Save figure
-savefig(F, fullfile(path{7}, fileName));
+% savefig(F, fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'compact');
 clear F
 
+% Save results
+% save(fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'mEC','sEC', '-append');

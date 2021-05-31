@@ -3,7 +3,7 @@ function fval = NLDhopf(x)
 
 
 %% Load parameters
-global activation dsig bfilt afilt C W N T omega co a aType;
+global activation entro dsig bfilt afilt C W N T omega co a aType cfType;
 
 
 %% Setup
@@ -36,36 +36,43 @@ z = 0.1*ones(N.ROI, 2);
 BOLD = hopf(z, wC, a, omega, dsig, T, N.ROI);
 
 % Compute dFC
-[~, dFCsim] = phasesync(BOLD, N.ROI, T.scan, bfilt, afilt, aType);
+[~, dFC] = phasesync(BOLD, N.ROI, T.scan, bfilt, afilt, aType);
 
 % compute simulated assembly activations
-projection =  W*dFCsim;
+projection =  W*dFC;
 
 
-%% Compute KS distance between simulated & empirical assembly activations
+%% Compute cost function
 
-% compute entropy, mean KS distance between assembly distributions
-entro = nan(N.IC, 2);
-% ksdist = nan(N.IC, 1);
-for ass = 1:N.IC
-	% Compute entropy of each assembly
-	entro(ass, 1) = HShannon_kNN_k_estimation(activation(ass,:), co);
-	entro(ass, 2) = HShannon_kNN_k_estimation(projection(ass,:), co);
-	
-	% Compute KS distance between assembly activation distributions
-	%[~, ~, ksdist(ass)] = kstest2(activation(ass,:), projection(ass,:));
+% Compute cost function
+switch cfType
+	case 'ksActive'			% mean KS distance between activation distributions
+		ksdist = nan(N.comp, 1);
+		for ass = 1:N.comp
+			[~, ~, ksdist(ass)] = kstest2(activation(ass,:), projection(ass,:));
+		end
+		fval = mean(ksdist);
+	case 'entroSum'			% Use difference between sum of entropies as cost function
+		entroSim = nan(N.comp, 1);
+		for ass = 1:N.comp
+			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
+		end
+		fval = sum([entro entroSim], 1, 'omitnan');
+		fval = abs(fval(1) - fval(2));
+	case 'eucEntro'			% Use Euclidean distance between total entropies as cost function
+		entroSim = nan(N.comp, 1);
+		for ass = 1:N.comp
+			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
+		end
+		entroSim = horzcat(entro, entroSim)';
+		fval = pdist(entroSim);
+	case 'ksEntro'			% Use KS distance between entropy distributions as cost function
+		entroSim = nan(N.comp, 1);
+		for ass = 1:N.comp
+			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
+		end
+		[~, ~, fval] = kstest2(entro, entroSim);
 end
-% fval = mean(ksdist);	% mean KS distance between activation distributions
-
-% Use difference between sum of entropies as cost function
-fval = sum(entro, 1, 'omitnan');
-fval = abs(fval(1) - fval(2));
-
-% Use Euclidean distance between total entropies as cost function
-% fval = pdist(entro');
-
-% Use KS distance between entropy distributions as cost function
-% [~, ~, fval] = kstest2(entro(:,1), entro(:,2));
 
 % Display cost function
 % display(['Current KS Distance: ', num2str(fval)]);

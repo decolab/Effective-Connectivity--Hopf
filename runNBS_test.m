@@ -73,10 +73,19 @@ cortex.view = [-90 90];							% set camera angle
 rdux = 0.7;						% proportion of surface faces to keep (<1)
 
 % set color index
-cind = {[1 0 0], [0 0 1]; [1 0 1], [0 1 1]};
+cind.node = [1 0 0; 0 0 1];
+cind.conn = cind.node;
 
 % Set number of brain images to generate
-singleRender = 1;
+render = 'layered';         % Number of images to generate per threshold.
+							% 'compare' to compare thresholds in single figure
+							% 'single' for single figure per threshold
+							% 'multiple' for single figure per network
+                            % 'layered' for two-level figure: single figure
+                            %           per threshold + individual networks
+
+% Set filename for saved figures
+fN = strsplit(fileName, '_');
 
 
 %% Load and format EC data
@@ -108,11 +117,11 @@ end
 stronk = nan(N.ROI, N.conditions, max(N.subjects), 2);
 
 % Compute in-strength and out-strength
-stronk(:,:,:,1) = squeeze(sum(EC, 2, 'omitnan'));	% In-strength: sum over rows
-stronk(:,:,:,2) = squeeze(sum(EC, 1, 'omitnan'));	% Out-strength: sum over columns
+stronk(:,:,:,1) = squeeze(sum(EC, 2));	% In-strength: sum over rows
+stronk(:,:,:,2) = squeeze(sum(EC, 1));	% Out-strength: sum over columns
 
 % Run comparisions
-strength.in = robustTests(stronk(:,1,:,1), stronk(:,2,:,1), N.ROI, 'p',0.05, 'testtype','permutation');
+strength.in = robustTests(stronk(:,1,1:N.subjects(1),1), stronk(:,2,1:N.subjects(2),1), N.ROI, 'p',0.05, 'testtype','permutation');
 strength.out = robustTests(stronk(:,1,:,2), stronk(:,2,:,2), N.ROI, 'p',0.05, 'testtype','permutation');
 
 % Tabulate FDR results
@@ -149,10 +158,11 @@ for n = 1:nnz(strength.summary{:,:})
 	legend(labels.Properties.VariableNames);
 	title(['Modeled ', strength.summary.Properties.VariableNames{c(n)}, '-Strength of ', label_AAL90{r(n)}]);
 end
-clear n ax r c instr outstr lbl f cg
+clear n ax r c lbl f cg % stronk instr outstr
 
-% Save as JPEG file
-% saveas(S, fullfile(path{5}, dirName, strcat(fileName, '_strength')), 'jpeg');
+% Save strength figure
+% savefig(S, fullfile(path{5}, dirName, strcat(fN{1}, '_strength')), 'compact');
+% saveas(S, fullfile(path{5}, dirName, strcat(fN{1}, '_strength')), 'png');
 
 
 %% Set parameter sweep for NBS
@@ -168,7 +178,7 @@ clear C c ind n i
 % Set arrays for parameter sweeps
 tstat = 3.5:0.5:6;
 contrast = [-1,1; 1,-1];
-strcont = {strjoin([labels.Properties.VariableNames(1), '<', labels.Properties.VariableNames(2)]), strjoin([labels.Properties.VariableNames(2), '<', labels.Properties.VariableNames(1)])};
+strcont = {strjoin([labels.Properties.VariableNames(1), '<', labels.Properties.VariableNames(2)]), strjoin([labels.Properties.VariableNames(1), '>', labels.Properties.VariableNames(2)])};
 
 % Set storage arrays
 storarray = nan(length(tstat), size(contrast,1));
@@ -224,11 +234,15 @@ d = nan(N.ROI, N.ROI, size(scomb,1));
 for s = 1:size(scomb, 1)
 	d(:,:,s) = pdist2(squeeze(EC(:,:, scomb(s,1))), squeeze(EC(:,:, scomb(s,2))), mecDist);
 end
+clear s
 
 [thresh, cont] = find(storarray);
-if ~isempty(thresh) && singleRender
-	[thresh,j] = unique(thresh);
-	for t = 1:length(thresh)
+if ~isempty(thresh) && strcmpi(render, 'compare')
+	[thresh,~] = unique(thresh);
+	F = figure('Position', [0 0 1280 1024]);
+	for t = 1:numel(thresh)
+		
+		% Compute mean distance map
 		map = nbs(thresh(t),:);
 		for m = 1:numel(map)
 			if iscell(map{m})
@@ -240,11 +254,170 @@ if ~isempty(thresh) && singleRender
 			end
 		end
 		
-		F(t) = figure('Position', [0 0 1280 1024]); hold on;
-		plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map, cind(1,:), strcont, strength.summary, rdux);
+		% Plot glass brain
+		subplot(3, numel(thresh), t); hold on;
+		plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
+		title(['Threshold ', num2str(tstat(t))]);
+		
+		% Set up subplots
+		ax(1) = subplot(3, numel(thresh), t+(numel(thresh)));	% Plot significant connections as binarized connectivity map
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			title('NBS Networks');
+			yticks([]); xticks([]);
+			pbaspect([1 1 1]);
+			% Calculate scatter Marker width in points
+			currentunits = get(ax(1),'Units');
+			set(ax(1), {'Color', 'Units'}, {'k', 'Points'});
+			axpos = get(ax(1),'Position');
+			set(ax(1), 'Units', currentunits); hold on;
+			markerWidth(1) = 1/diff(xlim(ax(1)))*axpos(3);
+		ax(2) = subplot(3, numel(thresh), t+2*(numel(thresh)));	% distance map
+			colormap(ax(2),cool); hold on
+			imagesc(ax(2), mean(d, 3, 'omitnan')); colorbar; hold on
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			title('Mean EC Distance');
+			yticks([]); xticks([]);
+			pbaspect([1 1 1]);
+			% Calculate scatter Marker width in points
+			currentunits = get(ax(2),'Units');
+			set(ax(2), {'Units'}, {'Points'});
+			axpos = get(ax(2),'Position');
+			set(ax(2), 'Units', currentunits); hold on;
+			markerWidth(2) = 1/diff(xlim(ax(2)))*axpos(3);
+		
+		for m = 1:numel(map)
+			
+			if iscell(map{m})
+				% scale transparency by strength
+				for n = 1:numel(map{m})
+					a(n) = sum(map{m}{n},'all');
+				end
+				a = a./max(a,[],'all','omitnan');
+				[~,ai(m)] = max(a);
+				
+				% Find & plot significant connections
+				for n = 1:numel(map{m})
+					[y, x] = find(map{m}{n});
+					scatter(ax(1), x, y, markerWidth(1)^2, [1 1 1].*a(n), 'filled', 's');
+				end
+
+				% Highlight mean EC matrix
+				for n = 1:numel(map{m})
+					[sconns(:,1), sconns(:,2)] = find(nbs{thresh(t),m}{n});	% extract significant connections
+					s(n,m) = scatter(ax(2), sconns(:,2), sconns(:,1), markerWidth(2)^2, cind.conn(m,:).*a(n), 's');
+					clear sconns
+				end
+			else
+				% Plot significant connections
+				[y, x] = find(map{m});
+				scatter(ax(1), x, y, markerWidth(1)^2, [1 1 1], 'filled', 's');
+
+				% Highlight mean EC matrix
+				[sconns(:,1), sconns(:,2)] = find(nbs{thresh(t),m}{n});	% extract significant connections
+				s(1,m) = scatter(ax(2), sconns(:,2), sconns(:,1), markerWidth(2)^2, cind.conn(m,:).*a(n), 's');
+				clear sconns
+				ai = 1;
+			end
+		end
+		% Plot legend in mean EC matrix
+		legend(ax(2), [s(ai(1),1),s(ai(2),2)], strcont, 'Location','bestoutside');
+		clear ai
 	end
 	
-elseif ~isempty(thresh)
+	% Save as PNG file, MATLAB figure
+	% saveas(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'png');
+	% savefig(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'compact');
+	
+elseif ~isempty(thresh) && strcmpi(render, 'single')
+	[thresh,~] = unique(thresh);
+	for t = 1:length(thresh)
+		
+		% Compute mean distance map
+		map = nbs(thresh(t),:);
+		for m = 1:numel(map)
+			if iscell(map{m})
+				for n = 1:numel(map{m})
+					map{m}{n} = map{m}{n}.*mean(d, 3, 'omitnan')./10;	% this would be an excellent place to apply recursive programming
+				end
+			else
+				map{m} = map{m}.*mean(d, 3, 'omitnan')./10;
+			end
+		end
+		
+		% Plot glass brain
+		F(t) = figure('Position', [0 0 1280 1024]);
+		subplot(2, 4, [3 4 7 8]); hold on;
+		plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
+		title(['NBS Networks, Threshold ', num2str(tstat(t))]);
+		
+		% Set up subplots
+		ax(1) = subplot(2, 4, [5 6]); set(ax(1),'Color','k'); hold on;	% Plot significant connections as binarized connectivity map				
+			title(['NBS Networks, Threshold ', num2str(tstat(t))]);
+			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			pbaspect([1 1 1]);
+			% Calculate scatter Marker width in points
+			currentunits = get(ax(1),'Units');
+			set(ax(1), {'Color', 'Units'}, {'k', 'Points'});
+			axpos = get(ax(1),'Position');
+			set(ax(1), 'Units', currentunits); hold on;
+			markerWidth(1) = 1/diff(xlim(ax(1)))*axpos(3);
+		ax(2) = subplot(2, 4, [1 2]); colormap(ax(2),cool); hold on;	% distance map
+			imagesc(ax(2), mean(d, 3, 'omitnan')); colorbar; hold on
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			title(['Mean Distance, ', condName{combs(1,1)}, ' to ', condName{combs(1,2)}, ' EC']);
+			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			pbaspect([1 1 1]);
+			% Calculate scatter Marker width in points
+			currentunits = get(ax(2),'Units');
+			set(ax(2), {'Units'}, {'Points'});
+			axpos = get(ax(2),'Position');
+			set(ax(2), 'Units', currentunits); hold on;
+			markerWidth(2) = 1/diff(xlim(ax(2)))*axpos(3);
+		
+		for m = 1:numel(map)
+			
+			if iscell(map{m})
+				% scale transparency by strength
+				for n = 1:numel(map{m})
+					a(n) = sum(map{m}{n},'all');
+				end
+				a = a./max(a,[],'all','omitnan');
+				
+				% Compute significant connections
+				for n = 1:numel(map{m})
+					[y, x] = find(map{m}{n});
+					scatter(ax(1), x, y, markerWidth(1)^2, [1 1 1].*a(n), 'filled', 's');
+				end
+
+				% Highlight mean EC matrix
+				for n = 1:numel(map{m})
+					[sconns(:,1), sconns(:,2)] = find(nbs{thresh(t),m}{n});	% extract significant connections
+					s(n,m) = scatter(ax(2), sconns(:,2), sconns(:,1), markerWidth(2)^2, cind.conn(m,:).*a(n), 's');
+					clear sconns
+				end
+			else
+				% Plot significant connections
+				[y, x] = find(map{m});
+				scatter(ax(1), x, y, markerWidth(1)^2, [1 1 1], 'filled', 's');
+
+				% Highlight mean EC matrix
+				[sconns(:,1), sconns(:,2)] = find(nbs{thresh(t),m}{n});	% extract significant connections
+				s(1,m) = scatter(ax(2), sconns(:,2), sconns(:,1), markerWidth(2)^2, cind.conn(m,:).*a(n), 's');
+				clear sconns
+			end
+		end
+		% Plot legend in mean EC matrix
+		legend(ax(2), s(1,:), strcont, 'Location','bestoutside', 'Orientation','horizontal');	
+		
+		% Save as PNG file, MATLAB figure
+		% saveas(F(t), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')))), 'png');
+	end
+	
+	% Save as MATLAB figure
+	% savefig(F, fullfile(path{5}, dirName, strcat(fN{1},"_NBS")), 'compact');
+	
+elseif ~isempty(thresh) && strcmpi(render, 'multiple')
 	imgs = cell(numel(unique(thresh)), numel(unique(cont)));
 	
 	for t = 1:length(thresh)
@@ -262,28 +435,33 @@ elseif ~isempty(thresh)
 
 			% Extract significant connections
 			[sconns(:,1), sconns(:,2)] = find(nbs{ind(1), ind(2)}{f});
+			
+			% Calculate scatter marker width in points
+			ax(2) = subplot(2, 4, [5 6]); colormap(ax(2),cool); hold on;
+			xlim([1 N.ROI]); ylim([1 N.ROI]);
+			currentunits = get(ax(2),'Units');
+			set(ax(2), {'Units'}, {'Points'});
+			axpos = get(ax(2),'Position');
+			set(ax(2), 'Units', currentunits); hold on;
+			markerWidth(2) = 1/diff(xlim(ax(2)))*axpos(3);
 
 			% Highlight mean EC matrix
-			ax(2) = subplot(2, 4, [5 6]); colormap(ax(2),autumn); hold on;
 			imagesc(mean(d, 3, 'omitnan')); colorbar; hold on
 			scatter(sconns(:,2), sconns(:,1), 10, 'g', 's');
-			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title(['Mean Distance between ', condName{combs(1,1)}, ' and ', condName{combs(1,2)}, ' EC']);
+			title(['Mean Distance, ', condName{combs(1,1)}, ' to ', condName{combs(1,2)}, ' EC']);
 			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
 			pbaspect([1 1 1]);
 
 			% Render in SPM
 			map = nbs{ind(1),ind(2)}{f}.*mean(d, 3, 'omitnan')./10;
 			ax = subplot(2, 4, [3 4 7 8]); hold on
-			plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map, cind(1,:), strcont, strength.summary, rdux);
-			% plot_nodes_in_cortex(cortex, zscore(memberships(:,i)), coords_AAL90, origin, sphereScale, [], map, cind(1,:), strength.summary, rdux);
-			% plot_nodes_in_cortex(cortex, zscore(mean(memberships,2)), coords_AAL90, origin, sphereScale, [], map, rdux);
+			plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
 
 			% Title figure
-			sgtitle(['Threshold ', num2str(tstat(ind(1))), ', ', strcont(ind(2),:)]);
+			sgtitle(['Threshold ', num2str(tstat(ind(1))), ', ', strcont{ind(2)}]);
 
-			% Save as JPEG file
-%			saveas(F(f), fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'), '')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')), '_N', num2str(f))), 'jpeg');
+			% Save as PNG file
+			% saveas(F(f), fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'), '')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')), '_N', num2str(f))), 'png');
 			clear sconns
 		end
 
@@ -291,20 +469,25 @@ elseif ~isempty(thresh)
 		imgs{ind(1), ind(2)} = F;
 
 		% Save F
-%		savefig(F, fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'), '')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')))));
+		% savefig(F, fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'),'')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')))));
 		clear F
 	end
+	
+	% Save as MATLAB figure
+	% savefig(F, fullfile(path{5}, dirName, strcat(fN{1},"_NBS")), 'compact');
 end
-clear K k n f t scomb ax ind nsig s thresh cont
+clear K k n f t scomb ax ind nsig s thresh cont m n bin x y F fN
 
 
 %% Save results
 
 % Save figure
 if exist('F', 'var')
-%	savefig(F, fullfile(path{5}, dirName, strcat(fileName(1:end-4), '_NBS')), 'compact');
+	fN = strsplit(fileName, '_');
+	% saveas(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'png');
+	% savefig(F, fullfile(path{5}, dirName, strjoin({fN{1:end-1},'NBS'},'_')), 'compact');
 end
-clear c C F
+clear c C F S
 
 % Save results
 % save(fullfile(path{5}, dirName, fileName(1:end-4)), 'strength','nbs','STATS','GLM','tstat','contrast','storarray', '-append');
