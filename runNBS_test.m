@@ -51,17 +51,17 @@ fileName = fileName.name;
 intercept = false;	% determines whether to use intercept term in NBS
 
 % Load network labels
-label_AAL90 = load(fullfile(path{6},'AAL_labels.mat'));
-label_AAL90 = string(label_AAL90.label90);			% Convert labels to strings
-label_AAL90 = strip(LR_version_symm(label_AAL90));	% Convert labels to symmetric format
+label_ROI = load(fullfile(path{6},'AAL_labels.mat'));
+label_ROI = string(label_ROI.label90);			% Convert labels to strings
+label_ROI = strip(LR_version_symm(label_ROI));	% Convert labels to symmetric format
 
 % Generate MNI coordinates
-coords_AAL90 = load(fullfile(path{6}, 'aal_cog.txt'), 'aal_cog');
-coords_AAL90 = LR_version_symm(coords_AAL90);
+coords_ROI = load(fullfile(path{6}, 'aal_cog.txt'), 'aal_cog');
+coords_ROI = LR_version_symm(coords_ROI);
 origin = [65 45.5 35];							% center origin
 MNIscale = 5.5/10;								% scale MNI coordinates
 sphereScale = 2.5;								% scale sphere size
-coords_AAL90 = MNIscale*coords_AAL90;			% scale MNI coordinates
+coords_ROI = MNIscale*coords_ROI;			% scale MNI coordinates
 clear label90 MNIscale
 
 % Set brain rendering parameters
@@ -125,12 +125,12 @@ strength.in = robustTests(stronk(:,1,1:N.subjects(1),1), stronk(:,2,1:N.subjects
 strength.out = robustTests(stronk(:,1,:,2), stronk(:,2,:,2), N.ROI, 'p',0.05, 'testtype','permutation');
 
 % Tabulate FDR results
-strength.summary = table(strength.in.FDR, strength.out.FDR, 'RowNames',label_AAL90, 'VariableNames',{'In','Out'});
+strength.summary = table(strength.in.FDR, strength.out.FDR, 'RowNames',label_ROI, 'VariableNames',{'In','Out'});
 
 % Format labels for strength results
 instr = horzcat(squeeze(stronk(:,1,:,1))', squeeze(stronk(:,2,:,1))');
 outstr = horzcat(squeeze(stronk(:,1,:,2))', squeeze(stronk(:,2,:,2))');
-lbl = {repmat(label_AAL90, [2 1]), cat(1, repmat(string(labels.Properties.VariableNames{1}),[N.ROI 1]), repmat(string(labels.Properties.VariableNames{2}),[N.ROI 1]))};
+lbl = {repmat(label_ROI, [2 1]), cat(1, repmat(string(labels.Properties.VariableNames{1}),[N.ROI 1]), repmat(string(labels.Properties.VariableNames{2}),[N.ROI 1]))};
 cg = cat(1, repmat(["b";"r"],[N.ROI 1])); %, repmat("b",[N.ROI 1]));	% cg = ["r", "b"];
 [r, c] = find(strength.summary{:,:});
 
@@ -156,7 +156,7 @@ for n = 1:nnz(strength.summary{:,:})
 	histogram(squeeze(stronk(r(n),1,:,c(n))), 'Normalization','Probability', 'BinWidth',sz, 'FaceAlpha',0.5); hold on;
 	histogram(squeeze(stronk(r(n),2,:,c(n))), 'Normalization','Probability', 'BinWidth',sz, 'FaceAlpha',0.5);
 	legend(labels.Properties.VariableNames);
-	title(['Modeled ', strength.summary.Properties.VariableNames{c(n)}, '-Strength of ', label_AAL90{r(n)}]);
+	title(['Modeled ', strength.summary.Properties.VariableNames{c(n)}, '-Strength of ', label_ROI{r(n)}]);
 end
 clear n ax r c lbl f cg % stronk instr outstr
 
@@ -256,7 +256,7 @@ if ~isempty(thresh) && strcmpi(render, 'compare')
 		
 		% Plot glass brain
 		subplot(3, numel(thresh), t); hold on;
-		plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
+		plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
 		title(['Threshold ', num2str(tstat(t))]);
 		
 		% Set up subplots
@@ -347,13 +347,13 @@ elseif ~isempty(thresh) && strcmpi(render, 'single')
 		% Plot glass brain
 		F(t) = figure('Position', [0 0 1280 1024]);
 		subplot(2, 4, [3 4 7 8]); hold on;
-		plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
+		plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
 		title(['NBS Networks, Threshold ', num2str(tstat(t))]);
 		
 		% Set up subplots
 		ax(1) = subplot(2, 4, [5 6]); set(ax(1),'Color','k'); hold on;	% Plot significant connections as binarized connectivity map				
 			title(['NBS Networks, Threshold ', num2str(tstat(t))]);
-			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			yticks(1:N.ROI); yticklabels(label_ROI); xticks([]);
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			pbaspect([1 1 1]);
 			% Calculate scatter Marker width in points
@@ -366,7 +366,7 @@ elseif ~isempty(thresh) && strcmpi(render, 'single')
 			imagesc(ax(2), mean(d, 3, 'omitnan')); colorbar; hold on
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			title(['Mean Distance, ', condName{combs(1,1)}, ' to ', condName{combs(1,2)}, ' EC']);
-			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			yticks(1:N.ROI); yticklabels(label_ROI); xticks([]);
 			pbaspect([1 1 1]);
 			% Calculate scatter Marker width in points
 			currentunits = get(ax(2),'Units');
@@ -429,7 +429,7 @@ elseif ~isempty(thresh) && strcmpi(render, 'multiple')
 			ax(1) = subplot(2, 4, [1 2]); colormap(ax(1),bone); hold on;
 			imagesc(full(nbs{ind(1), ind(2)}{f})); colorbar;
 			title(['NBS Network ', num2str(f)]);
-			yticks(1:N.ROI); yticklabels(label_AAL90);
+			yticks(1:N.ROI); yticklabels(label_ROI);
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			pbaspect([1 1 1]);
 
@@ -449,13 +449,13 @@ elseif ~isempty(thresh) && strcmpi(render, 'multiple')
 			imagesc(mean(d, 3, 'omitnan')); colorbar; hold on
 			scatter(sconns(:,2), sconns(:,1), 10, 'g', 's');
 			title(['Mean Distance, ', condName{combs(1,1)}, ' to ', condName{combs(1,2)}, ' EC']);
-			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			yticks(1:N.ROI); yticklabels(label_ROI); xticks([]);
 			pbaspect([1 1 1]);
 
 			% Render in SPM
 			map = nbs{ind(1),ind(2)}{f}.*mean(d, 3, 'omitnan')./10;
 			ax = subplot(2, 4, [3 4 7 8]); hold on
-			plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
+			plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
 
 			% Title figure
 			sgtitle(['Threshold ', num2str(tstat(ind(1))), ', ', strcont{ind(2)}]);

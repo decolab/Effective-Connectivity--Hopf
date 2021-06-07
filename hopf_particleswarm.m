@@ -77,9 +77,9 @@ aType = e.aType;
 clear e
 
 % Load network labels
-label_AAL90 = load(fullfile(path{3}, 'Atlases', 'AAL', 'AAL_labels'));
-label_AAL90 = string(label_AAL90.label90);
-label_AAL90 = strip(LR_version_symm(label_AAL90));
+labels_ROI = load(fullfile(path{3}, 'Atlases', 'AAL', 'AAL_labels'));
+labels_ROI = string(labels_ROI.label90);
+labels_ROI = strip(LR_version_symm(labels_ROI));
 
 % Reset N.fig
 N.fig = 1;
@@ -340,7 +340,7 @@ switch typeoffit
 			imagesc(mEC(:,:,c)); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			title(['Mean of ', condName{c}]);
-			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
 			pbaspect([1 1 1]);
 
 			% Plot standard deviation EC of each condition
@@ -364,7 +364,7 @@ switch typeoffit
 			imagesc(pdist2(squeeze(mEC(:,:,k(1))), squeeze(mEC(:,:,k(2))), mecDist)); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			title(['Mean: ', condName{k(1)}, ' vs. ' condName{k(2)}]);
-			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
 			pbaspect([1 1 1]);
 			
 			% Plot standard deviation
@@ -397,7 +397,7 @@ switch typeoffit
 			imagesc(mean(d, 3, 'omitnan')); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			title(['Mean: ' condName{k(1)} ' vs. ' condName{k(2)}]);
-			yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+			yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
 			pbaspect([1 1 1]);
 			
 			% Plot standard deviation of distance
@@ -418,7 +418,7 @@ switch typeoffit
 			colormap jet
 			imagesc(squeeze(EC(:,:,c))); colorbar;
 			title(['EC of ', condName{c}, ' Mean Entropy']);
-			yticks(1:N.ROI); yticklabels(label_AAL90);
+			yticks(1:N.ROI); yticklabels(labels_ROI);
 			pbaspect([1 1 1]);
 		end
 		clear c
@@ -435,7 +435,7 @@ switch typeoffit
 			colormap jet
 			imagesc(mdist); colorbar;
 			title(['Distance between Mean EC of Conditions ', num2str(k(1)), ' and ' num2str(k(2))]);
-			yticks(1:N.ROI); yticklabels(label_AAL90);
+			yticks(1:N.ROI); yticklabels(labels_ROI);
 			pbaspect([1 1 1]);
 		end
 end
