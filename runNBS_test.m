@@ -128,10 +128,10 @@ strength.out = robustTests(stronk(:,1,:,2), stronk(:,2,:,2), N.ROI, 'p',0.05, 't
 strength.summary = table(strength.in.FDR, strength.out.FDR, 'RowNames',label_ROI, 'VariableNames',{'In','Out'});
 
 % Format labels for strength results
-instr = horzcat(squeeze(stronk(:,1,:,1))', squeeze(stronk(:,2,:,1))');
-outstr = horzcat(squeeze(stronk(:,1,:,2))', squeeze(stronk(:,2,:,2))');
-lbl = {repmat(label_ROI, [2 1]), cat(1, repmat(string(labels.Properties.VariableNames{1}),[N.ROI 1]), repmat(string(labels.Properties.VariableNames{2}),[N.ROI 1]))};
-cg = cat(1, repmat(["b";"r"],[N.ROI 1])); %, repmat("b",[N.ROI 1]));	% cg = ["r", "b"];
+instr = horzcat(squeeze(stronk(:,2,:,1))', squeeze(stronk(:,1,:,1))');
+outstr = horzcat(squeeze(stronk(:,2,:,2))', squeeze(stronk(:,1,:,2))');
+lbl = {repmat(label_ROI, [2 1]), cat(1, repmat(string(labels.Properties.VariableNames{2}),[N.ROI 1]), repmat(string(labels.Properties.VariableNames{1}),[N.ROI 1]))};
+cg = repmat(['r';'b'],[N.ROI 1]);
 [r, c] = find(strength.summary{:,:});
 
 % Visualize strength results
@@ -176,7 +176,7 @@ end
 clear C c ind n i
 
 % Set arrays for parameter sweeps
-tstat = 3.5:0.5:6;
+tstat = 2:0.5:6;
 contrast = [-1,1; 1,-1];
 strcont = {strjoin([labels.Properties.VariableNames(1), '<', labels.Properties.VariableNames(2)]), strjoin([labels.Properties.VariableNames(1), '>', labels.Properties.VariableNames(2)])};
 
@@ -262,6 +262,7 @@ if ~isempty(thresh) && strcmpi(render, 'compare')
 		% Set up subplots
 		ax(1) = subplot(3, numel(thresh), t+(numel(thresh)));	% Plot significant connections as binarized connectivity map
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
+            grid on;
 			title('NBS Networks');
 			yticks([]); xticks([]);
 			pbaspect([1 1 1]);
@@ -272,7 +273,8 @@ if ~isempty(thresh) && strcmpi(render, 'compare')
 			set(ax(1), 'Units', currentunits); hold on;
 			markerWidth(1) = 1/diff(xlim(ax(1)))*axpos(3);
 		ax(2) = subplot(3, numel(thresh), t+2*(numel(thresh)));	% distance map
-			colormap(ax(2),cool); hold on
+			colormap(ax(2),cool);
+            hold on; grid on
 			imagesc(ax(2), mean(d, 3, 'omitnan')); colorbar; hold on
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			title('Mean EC Distance');
@@ -285,39 +287,24 @@ if ~isempty(thresh) && strcmpi(render, 'compare')
 			set(ax(2), 'Units', currentunits); hold on;
 			markerWidth(2) = 1/diff(xlim(ax(2)))*axpos(3);
 		
+        % Plot connectivity matrix & distance map
 		for m = 1:numel(map)
-			
-			if iscell(map{m})
-				% scale transparency by strength
-				for n = 1:numel(map{m})
-					a(n) = sum(map{m}{n},'all');
-				end
-				a = a./max(a,[],'all','omitnan');
-				[~,ai(m)] = max(a);
-				
-				% Find & plot significant connections
-				for n = 1:numel(map{m})
-					[y, x] = find(map{m}{n});
-					scatter(ax(1), x, y, markerWidth(1)^2, [1 1 1].*a(n), 'filled', 's');
-				end
+            % scale transparency by strength
+            for n = 1:numel(map{m})
+                a(n) = sum(map{m}{n},'all');
+            end
+            a = a./max(a,[],'all','omitnan');
+            [~,ai(m)] = max(a);
 
-				% Highlight mean EC matrix
-				for n = 1:numel(map{m})
-					[sconns(:,1), sconns(:,2)] = find(nbs{thresh(t),m}{n});	% extract significant connections
-					s(n,m) = scatter(ax(2), sconns(:,2), sconns(:,1), markerWidth(2)^2, cind.conn(m,:).*a(n), 's');
-					clear sconns
-				end
-			else
-				% Plot significant connections
-				[y, x] = find(map{m});
-				scatter(ax(1), x, y, markerWidth(1)^2, [1 1 1], 'filled', 's');
+            for n = 1:numel(map{m})
+                % Find & plot significant connections
+                [y, x] = find(map{m}{n});
+                scatter(ax(1), x, y, markerWidth(1)^2, cind.conn(m,:), 'filled', 's');
 
-				% Highlight mean EC matrix
-				[sconns(:,1), sconns(:,2)] = find(nbs{thresh(t),m}{n});	% extract significant connections
-				s(1,m) = scatter(ax(2), sconns(:,2), sconns(:,1), markerWidth(2)^2, cind.conn(m,:).*a(n), 's');
-				clear sconns
-				ai = 1;
-			end
+                % Highlight mean EC matrix
+                [x, y] = find(map{m}{n});	% extract significant connections
+                s(n,m) = scatter(ax(2), y, x, markerWidth(2)^2, cind.conn(m,:), 's');
+            end
 		end
 		% Plot legend in mean EC matrix
 		legend(ax(2), [s(ai(1),1),s(ai(2),2)], strcont, 'Location','bestoutside');

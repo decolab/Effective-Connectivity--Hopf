@@ -76,7 +76,7 @@ for t = 1:max(unique((ind)))
     
     % Render overall network in SPM
     ax(1,1) = subplot(1, 5, [1 2]); hold on;
-    plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
+    plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
     sgtitle(F(t,1), ['Threshold: t-statistic = ', num2str(tstat(ind(t,1)))]);
     title(ax(1,1), "All Components", 'FontSize',12);
     
@@ -96,7 +96,7 @@ for t = 1:max(unique((ind)))
         colind.conn = cind.conn(c,:);
         for f = 1:numel(map{:,c})
             ax(f,2) = nexttile(T); hold on
-            plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_AAL90, origin, sphereScale, [], map{c}{f}, colind, [], strength.summary, rdux);
+            plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map{c}{f}, colind, [], strength.summary, rdux);
             title(strcat("Contrast: ", strcont{c}));
             subtitle(strcat("Component ", num2str(f)));
         end
@@ -106,9 +106,9 @@ clear c f colind m n map a col climits ncomp T s
 
 
 %% Save figures
-for t = 1:max(unique((ind)))
-	saveas(F(t,1), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')), "_all")), 'png');
-    saveas(F(t,2), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')), "_individual")), 'png');
-end
-% Save as MATLAB figure
-savefig(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'compact');
+% for t = 1:max(unique((ind)))
+% 	saveas(F(t,1), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')), "_all")), 'png');
+%     saveas(F(t,2), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')), "_individual")), 'png');
+% end
+% % Save as MATLAB figure
+% savefig(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'compact');
