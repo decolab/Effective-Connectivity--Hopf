@@ -22,7 +22,7 @@ clear; close all; clc;
 global activation entro dsig bfilt afilt C a W N T omega G co aType cfType;
 
 % Define file to analyze
-fileName = 'LEICA90_CIC_COS_WideBand_k1_Iteration2';
+fileName = 'LE_ICA_AAL90_CIC_COS_wideband_k1_Iteration2';
 
 % Set EC type to compute
 tofit = 'IC';			% 'ROI' to fit by region, 'ICA' to fit by assembly
@@ -45,9 +45,9 @@ path{1,1} = strjoin(path{1}(1:end-2),'/');
 path{2,1} = fullfile(path{1},'MATLAB');
 
 % Set required subdirectories
-path{5,1} = fullfile(path{3},'OCD','Data');
-path{6,1} = fullfile(path{3},'OCD','Results','LEICA');
-path{7,1} = fullfile(path{3},'OCD','Results','EC');
+path{5,1} = fullfile(path{3},'UCLA','Data');
+path{6,1} = fullfile(path{3},'UCLA','Results','LEICA');
+path{7,1} = fullfile(path{3},'UCLA','Results','EC');
 
 % Add relevant paths
 fpath{1,1} = fullfile(path{3},'Functions');
@@ -62,24 +62,25 @@ clear fpath k
 %% Set file names & load data
 
 % Load data
-e = load(fullfile(path{6}, fileName), 'activities', 'entro','memberships','co','W','T','N', 'labels','dFC', 'aType');
+e = load(fullfile(path{6}, fileName), 'activities', 'entro','memberships','I','co','W','T','N','C', 'labels','dFC', 'aType');
 activities = e.activities;
 sEntro = e.entro;
 memberships = e.memberships;
+comps = e.C;
 co = e.co;
 W = e.W;
 T = e.T;
 N = e.N;
 N.comp = N.IC; N = rmfield(N, 'IC');
-labels = e.labels;
+I = e.I;
 dFC = e.dFC;
 aType = e.aType;
 clear e
 
 % Load network labels
-labels_ROI = load(fullfile(path{3}, 'Atlases', 'AAL', 'AAL_labels'));
-labels_ROI = string(labels_ROI.label90);
-labels_ROI = strip(LR_version_symm(labels_ROI));
+labels_ROI = load(fullfile(path{5}, 'formattedUCLA.mat'));   % load(fullfile(path{3}, 'Atlases', 'AAL', 'AAL_labels'));
+labels_ROI = labels_ROI.labels_ROI; % string(labels_ROI.label90);
+% labels_ROI = strip(LR_version_symm(labels_ROI));
 
 % Reset N.fig
 N.fig = 1;
@@ -99,9 +100,9 @@ clear nIter fList
 % Set connectivity parameters
 G = 0.2;				% global coupling weight
 
-% Set structural connectivity (why?)
-C = load(fullfile(path{5}, 'sc90.mat'));
-C = C.sc90;
+% Set structural connectivity
+C = load(fullfile(path{5}, 'formattedUCLA.mat'));  % load(fullfile(path{3}, 'Atlases', 'AAL', 'sc90.mat'));
+C = C.ADJ_average;
 Cnorm = C/max(C,[],'all','omitnan')*G;
 
 
@@ -109,7 +110,7 @@ Cnorm = C/max(C,[],'all','omitnan')*G;
 
 % Set condition names
 if ~exist('condName', 'var')
-	condName = labels.Properties.VariableNames;
+	condName = I.Properties.VariableNames;
 end
 
 % Temporal parameters
@@ -130,9 +131,7 @@ params.filt.afilt = afilt;
 %% Compute effective connectivity
 
 % Set design matrix
-I = zeros(sum(N.subjects), N.conditions);
-I(1:N.subjects(1), 1) = 1;
-I(1+N.subjects(1):sum(N.subjects), 2) = 1;
+I = I{:,:};
 
 % Find number of nonzero connections, approximate structural connectivity
 % per condition
@@ -315,7 +314,7 @@ end
 clear x i j s c a ng nn omega entro lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90
 
 % Save results
-% save(fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName));
+save(fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName));
 
 
 %% Display EC of controls, OCD
@@ -355,12 +354,12 @@ switch typeoffit
 
 		% Display distance between mean ECs
 		F(2) = figure;
-		combs = nchoosek(1:N.conditions, 2);
-		for c = 1:size(combs, 1)
-			k(1) = combs(c,1); k(2) = combs(c,2);
+		comps = nchoosek(1:N.conditions, 2);
+		for c = 1:size(comps, 1)
+			k(1) = comps(c,1); k(2) = comps(c,2);
 			
 			% Plot mean
-			subplot(size(combs,1), 2, c); colormap jet
+			subplot(size(comps,1), 2, c); colormap jet
 			imagesc(pdist2(squeeze(mEC(:,:,k(1))), squeeze(mEC(:,:,k(2))), mecDist)); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			title(['Mean: ', condName{k(1)}, ' vs. ' condName{k(2)}]);
@@ -368,7 +367,7 @@ switch typeoffit
 			pbaspect([1 1 1]);
 			
 			% Plot standard deviation
-			subplot(size(combs,1), 2, 2*c); colormap jet
+			subplot(size(comps,1), 2, 2*c); colormap jet
 			imagesc(pdist2(squeeze(sEC(:,:,k(1))), squeeze(sEC(:,:,k(2))), mecDist)); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			title(['Standard Deviation: ', condName{k(1)}, ' vs. ' condName{k(2)}]);
@@ -379,9 +378,8 @@ switch typeoffit
 
 		% Display mean distance between ECs
 		F(3) = figure;
-		combs = nchoosek(1:N.conditions, 2);
-		for c = 1:size(combs, 1)
-			k(1) = combs(c,1); k(2) = combs(c,2);
+		for c = 1:size(comps, 1)
+			k(1) = comps(c,1); k(2) = comps(c,2);
 			scomb = nchoosek(1:sum(N.subjects(k)), 2);
 			scomb(scomb(:,2)<=N.subjects(k(1)),:) = [];
 			scomb(scomb(:,1)>N.subjects(k(1)),:) = [];
@@ -393,7 +391,7 @@ switch typeoffit
 			end
 			
 			% Plot mean of distance
-			subplot(size(combs,1), 2, c); colormap jet
+			subplot(size(comps,1), 2, c); colormap jet
 			imagesc(mean(d, 3, 'omitnan')); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			title(['Mean: ' condName{k(1)} ' vs. ' condName{k(2)}]);
@@ -401,7 +399,7 @@ switch typeoffit
 			pbaspect([1 1 1]);
 			
 			% Plot standard deviation of distance
-			subplot(size(combs,1), 2, c+1); colormap jet
+			subplot(size(comps,1), 2, c+1); colormap jet
 			imagesc(std(d, 0, 3, 'omitnan')); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			title(['Standard Deviation: ' condName{k(1)} ' vs. ' condName{k(2)}]);
@@ -425,10 +423,9 @@ switch typeoffit
 
 		% Display distance mean differences between ECs in each condition
 		F(2) = figure;
-		combs = nchoosek(1:N.conditions, 2);
-		for c = 1:size(combs, 1)
-			subplot(1, size(combs,1), c);
-			k(1) = combs(c,1); k(2) = combs(c,2);
+		for c = 1:size(comps, 1)
+			subplot(1, size(comps,1), c);
+			k(1) = comps(c,1); k(2) = comps(c,2);
 			mdist = abs(squeeze(EC(:,:,k(1))) - squeeze(EC(:,:,k(2))));	% pdist2(squeeze(EC(:,:,k(1))), squeeze(EC(:,:,k(2))), mecDist);
 
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
@@ -442,8 +439,8 @@ end
 clear k s d c m
 
 % Save figure
-% savefig(F, fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'compact');
+savefig(F, fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'compact');
 clear F
 
 % Save results
-% save(fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'mEC','sEC', '-append');
+save(fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'mEC','sEC', '-append');
