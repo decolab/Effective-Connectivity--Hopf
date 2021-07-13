@@ -1,3 +1,33 @@
+%% Set parameters
+
+% Legends
+strcont = {strjoin([labels.Properties.VariableNames(1), '<', labels.Properties.VariableNames(2)]), strjoin([labels.Properties.VariableNames(1), '>', labels.Properties.VariableNames(2)])};
+
+% Set brain rendering parameters
+cortex.file = fullfile(path{3},'OCD','Data','MNI152_T1_2mm_brain_mask.nii');	% file containing cortical atlas
+cortex.color = [0.9 0.9 0.9];					% color for cortical rendering
+cortex.transparency = 0.1;						% set to 1 for opaque cortex
+cortex.val = 0.3;								% set isonormal line spacing
+cortex.view = [-90 90];							% set camera angle
+rdux = 0.7;						% proportion of surface faces to keep (<1)
+
+% set color index
+cind.node = [1 0 0; 0 0 1];
+cind.conn = ['m'; 'c'];
+
+
+%% locate significant components
+j = h{:,'IC'};
+if numel(j) > 1
+	i = j{1};
+	for k = 2:numel(j)
+		i = union(i, j{k});
+	end
+	i = unique(i);
+else
+	i = j{:};
+end
+clear j
 
 
 %% Extract individual networks
@@ -5,27 +35,28 @@
 [ind(:,1), ind(:,2)] = find(storarray);
 fN = strsplit(fileName, '_');
 
+nm = cell(1,max(unique((ind))));
+compROIs = nm;
 for t = 1:max(unique((ind)))
     
     % Open figure
     F(t,1) = figure('Position', [0 0 1240 1024]);
     
     % Plot significant connections as binarized connectivity map
-    ax(2,1) = subplot(1, 5, 3:5); hold on;
-    yticks(1:N.ROI); xticks([]);
-    set(ax(2,1),{'Color', 'FontSize', 'YTickLabel'},{'k', 6, label_AAL90});
+    ax(2,1) = subplot(4, 5, [3:5, 8:10, 13:15]); hold on; grid on
+	set(ax(2,1), {'YTick','YTickLabel','FontSize'}, {1:N.ROI, label_ROI, 5});
+    set(ax(2,1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, label_ROI(5:5:N.ROI), -90});
+    set(ax(2,1),{'Color', 'FontSize'},{'w', 6});
     xlim([0.5 N.ROI+0.5]); ylim([0.6 N.ROI+0.5]);
     title("Significant Connections", 'FontSize',12);
     pbaspect([1 1 1]);
-        
-%     % Plot mean distance between patient & control
-%     ax(3,1) = subplot(2, 2, 4); colormap(ax(3,1),cool);
-%     imagesc(ax(3,1), mean(d, 3, 'omitnan')); colorbar; hold on
-%     yticks(1:N.ROI); xticks([]);
-%     set(ax(3,1),{'Color', 'FontSize', 'YTickLabel'},{'k', 4, label_AAL90});
-%     xlim([1 N.ROI+0.5]); ylim([0.5 N.ROI]);
-%     title(['Mean Distance, ', condName{combs(1,1)}, ' to ', condName{combs(1,2)}, ' EC'], 'FontSize',12);
-%     pbaspect([1 1 1]);
+    
+    % Plot node memberships as bar chart
+    ax(3,1) = subplot(4, 5, 16:20); hold on
+	% (ax(3,1), {'YTick','YTickLabel','FontSize'}, {1:N.ROI, label_ROI, 5}); ylim([0.5 N.ROI+0.5]);
+    % xlim([-1 1]); xticks([]);
+    set(ax(3,1),{'Color', 'FontSize'},{'w', 6});
+    title("Node Memberships", 'FontSize',12);
     
     % Calculate scatter Marker width in points
     currentunits = get(ax(2,1),'Units');
@@ -36,53 +67,49 @@ for t = 1:max(unique((ind)))
     
     % Compute mean distance map & get number of components per threshold
     map = nbs(ind(t,1),:); s = scatter([],[]); lgnd  = 0;
+    nm{t} = cell(size(map));
     for c = 1:numel(map)
-        if iscell(map{c})
-            for n = 1:numel(map{c})
-                map{c}{n} = map{c}{n}.*mean(d, 3, 'omitnan')./10;	% this would be an excellent place to apply recursive programming
-                a(n) = sum(map{c}{n},'all');                        % scale transparency by strength
-            end
-            [~,~,a] = find(a);
-            a = a./max(a,[],'all','omitnan');
-            
-            for n = 1:numel(map{c})
-                % Plot significant connections
-                [y, x] = find(map{c}{n});
-                col = cind.conn + (n-1)/(max(numel(map{c})-1,1)).*[0 0 1; 0 1 0];
-                % col = [a(n) 1-a(n) 0; 0 1-a(n), a(n)];
-                s(end+1,1) = scatter(ax(2,1), x, y, markerWidth(1)^2, col(c,:), 'filled', 's');
-                lgnd(end+1,1) = c;
-                
-%                 % Highlight mean EC matrix
-%                 [sconns(:,1), sconns(:,2)] = find(nbs{thresh(t),c}{n});	% extract significant connections
-%                 m(c) = scatter(ax(3,1), sconns(:,2), sconns(:,1), markerWidth(2)^2, cind.node(c,:), 's');
-%                 clear sconns
-            end
-        else
-            map{c} = map{c}.*mean(d, 3, 'omitnan')./10;
+%         for n = 1:numel(map{c})
+%             map{c}{n} = map{c}{n}.*mean(d, 3, 'omitnan')./10;	% this would be an excellent place to apply recursive programming
+%             a(n) = sum(map{c}{n},'all');                        % scale transparency by strength
+%         end
+%         [~,~,a] = find(a);
+%         a = a./max(a,[],'all','omitnan');
+
+        % Extract significant connections
+        nm{t}{c} = zeros(numel(label_ROI), numel(map{c}));
+        for n = 1:numel(map{c})
+            [y, x] = find(map{c}{n});
+            col = cind.conn + (n-1)/(max(numel(map{c})-1,1)).*[0 0 1; 0 1 0];
+            % col = [a(n) 1-a(n) 0; 0 1-a(n), a(n)];
             
             % Plot significant connections
-            [y, x] = find(map{c});
-            s(end+1,1) = scatter(ax(2,1), x, y, markerWidth(1)^2, cind.node(c,:), 'filled', 's');
+            s(end+1,1) = scatter(ax(2,1), x, y, markerWidth(1)^2, cind.conn(c,:), 'filled', 's');
             lgnd(end+1,1) = c;
-
-%             % Highlight mean EC matrix
-%             [sconns(:,1), sconns(:,2)] = find(nbs{thresh(t),c}{n});	% extract significant connections
-%             m(c) = scatter(ax(3,1), sconns(:,2), sconns(:,1), markerWidth(2)^2, cind.node(c,:), 's');
-%             clear sconns
+            
+            % Label which nodes in which communities
+            nm{t}{c}(unique(y),n) = ones(length(unique(y)), 1);
         end
+        nm{t}{c} = (-nm{t}{c}).^(c+1);
     end
     delete(s(1,:)); s(1,:) = []; lgnd(1,:) = [];
     
+    % Plot node roles
+    nm{t} = cell2mat(nm{t});
+    bar(ax(3,1), categorical(label_ROI), nm{t});
+    
+    % List nodes in each component
+    compROIs{t} = repmat(label_ROI, [1 size(nm{t},2)]);
+    compROIs{t}(~logical(nm{t})) = "-";
+    
     % Render overall network in SPM
-    ax(1,1) = subplot(1, 5, [1 2]); hold on;
-    plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, strength.summary, rdux);
+    ax(1,1) = subplot(4, 5, [1:2, 6:7, 11:12]); hold on;
+    plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, [], rdux);
     sgtitle(F(t,1), ['Threshold: t-statistic = ', num2str(tstat(ind(t,1)))]);
     title(ax(1,1), "All Components", 'FontSize',12);
     
-    % Plot legend in mean EC matrix
+    % Plot legend in connectivity matrix
     legend(ax(2,1), s(:,1), strcont(lgnd), 'Location','bestoutside', 'Color','w', 'FontSize',10);   %  'Orientation','horizontal',
-    % legend(ax(3,1), m, strcont, 'Location','bestoutside', 'Color','w', 'FontSize',10);
     clear s lgnd
 
 
@@ -96,9 +123,9 @@ for t = 1:max(unique((ind)))
         colind.conn = cind.conn(c,:);
         for f = 1:numel(map{:,c})
             ax(f,2) = nexttile(T); hold on
-            plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map{c}{f}, colind, [], strength.summary, rdux);
-            title(strcat("Contrast: ", strcont{c}));
-            subtitle(strcat("Component ", num2str(f)));
+            plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map{c}{f}, colind, [], [], rdux);
+            title(strcat("Contrast: ", strcont{c}), 'FontSize',12);
+            subtitle(strcat("Component ", num2str(f)), 'FontSize',8);
         end
     end
 end
