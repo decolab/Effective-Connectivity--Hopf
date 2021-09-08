@@ -22,7 +22,7 @@ clear; close all; clc;
 global activation entro dsig bfilt afilt C a W N T omega G co aType cfType;
 
 % Define file to analyze
-fileName = 'LE_ICA_AAL90_CIC_COS_wideband_k1_Iteration2';
+fileName = 'LE_ICA_ControlIC_COS_ALL_wideband_k1_Iteration1';
 
 % Set EC type to compute
 tofit = 'IC';			% 'ROI' to fit by region, 'ICA' to fit by assembly
@@ -46,7 +46,7 @@ path{2,1} = fullfile(path{1},'MATLAB');
 
 % Set required subdirectories
 path{5,1} = fullfile(path{3},'UCLA','Data');
-path{6,1} = fullfile(path{3},'UCLA','Results','LEICA');
+path{6,1} = fullfile(path{3},'UCLA','Results','LEICA','GroupIC');
 path{7,1} = fullfile(path{3},'UCLA','Results','EC');
 
 % Add relevant paths
@@ -62,7 +62,7 @@ clear fpath k
 %% Set file names & load data
 
 % Load data
-e = load(fullfile(path{6}, fileName), 'activities', 'entro','memberships','I','co','W','T','N','C', 'labels','dFC', 'aType');
+e = load(fullfile(path{6}, fileName), 'labels_ROI', 'activities', 'entro','memberships','I','co','W','T','N','C', 'labels','dFC', 'aType');
 activities = e.activities;
 sEntro = e.entro;
 memberships = e.memberships;
@@ -354,7 +354,6 @@ switch typeoffit
 
 		% Display distance between mean ECs
 		F(2) = figure;
-		comps = nchoosek(1:N.conditions, 2);
 		for c = 1:size(comps, 1)
 			k(1) = comps(c,1); k(2) = comps(c,2);
 			

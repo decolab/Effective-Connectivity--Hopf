@@ -53,10 +53,9 @@ for t = 1:max(unique((ind)))
     
     % Plot node memberships as bar chart
     ax(3,1) = subplot(4, 5, 16:20); hold on
-	% (ax(3,1), {'YTick','YTickLabel','FontSize'}, {1:N.ROI, label_ROI, 5}); ylim([0.5 N.ROI+0.5]);
-    % xlim([-1 1]); xticks([]);
     set(ax(3,1),{'Color', 'FontSize'},{'w', 6});
     title("Node Memberships", 'FontSize',12);
+    
     
     % Calculate scatter Marker width in points
     currentunits = get(ax(2,1),'Units');
@@ -104,7 +103,7 @@ for t = 1:max(unique((ind)))
     
     % Render overall network in SPM
     ax(1,1) = subplot(4, 5, [1:2, 6:7, 11:12]); hold on;
-    plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, [], rdux);
+    plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, labels_ROI, sphereScale, [], map, cind, strcont, [], rdux);
     sgtitle(F(t,1), ['Threshold: t-statistic = ', num2str(tstat(ind(t,1)))]);
     title(ax(1,1), "All Components", 'FontSize',12);
     
@@ -123,7 +122,7 @@ for t = 1:max(unique((ind)))
         colind.conn = cind.conn(c,:);
         for f = 1:numel(map{:,c})
             ax(f,2) = nexttile(T); hold on
-            plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, sphereScale, [], map{c}{f}, colind, [], [], rdux);
+            plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, labels_ROI, sphereScale, [], map{c}{f}, colind, [], [], rdux);
             title(strcat("Contrast: ", strcont{c}), 'FontSize',12);
             subtitle(strcat("Component ", num2str(f)), 'FontSize',8);
         end
