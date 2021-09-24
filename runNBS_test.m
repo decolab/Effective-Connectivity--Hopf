@@ -101,21 +101,6 @@ end
 
 %% Visualization Settings
 
-% Generate MNI coordinates
-origin = [63 45.5 35];				% center origin
-MNIscale = 5.5/10;					% scale MNI coordinates
-sphereScale = 2.5;					% scale sphere size
-coords_ROI = MNIscale*coords_ROI;	% scale MNI coordinates
-clear MNIscale
-
-% Set brain rendering parameters
-cortex.file = fullfile(path{6},'MNI152_T1_2mm_brain_mask.nii');	% file containing cortical atlas
-cortex.color = [0.9 0.9 0.9];					% color for cortical rendering
-cortex.transparency = 0.1;						% set to 1 for opaque cortex
-cortex.val = 0.3;								% set isonormal line spacing
-cortex.view = [-90 90];							% set camera angle
-rdux = 0.7;						% proportion of surface faces to keep (<1)
-
 % set color index
 cind.node = [1 0 0; 0 0 1];
 cind.conn = [1 0 1; 0 1 1];
@@ -304,237 +289,115 @@ save(fullfile(path{5}, dirName, fileName(1:end-4)), 'strength', '-append');
 % locate significant components
 i = h{strcmpi(spaces, space)}(ttype,:);
 
-% Find average distance between groups
-k(1) = comps(1,1); k(2) = comps(1,2);
-scomb = nchoosek(1:sum(N.subjects(k)), 2);
-scomb(scomb(:,2)<=N.subjects(k(1)),:) = [];
-scomb(scomb(:,1)>N.subjects(k(1)),:) = [];
-scomb(:,2) = scomb(:,2) - N.subjects(k(1));
-d = nan(N.ROI, N.ROI, size(scomb,1));
-for s = 1:size(scomb, 1)
-	d(:,:,s) = pdist2(squeeze(EC(:,:, scomb(s,1))), squeeze(EC(:,:, scomb(s,2))), mecDist);
-end
-clear s
+% Locate thresholds & contrasts with significant differences
+[~, ind] = find(storarray);
+ind = unique(ind); ind = ind(logical(mod(ind,2)));
 
-[thresh, cont] = find(storarray);
-if ~isempty(thresh) && strcmpi(render, 'compare')
-	[thresh,~] = unique(thresh);
-	F = figure('Position', [0 0 1280 1024]);
-	for t = 1:numel(thresh)
+nm = cell(1,max(unique((ind))));
+
+% Identify contrast of interest
+for c = 1:length(ind)
+    
+    % Generate node color map
+    nCol = zeros(N.ROI, 3);
+    cont = strjoin(condName(logical(contrast(ind(c),:))), " v. ");          % Generate contrast label
+    nCol(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))<0,:) = repmat(cind.node(1,:), sum(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))<0),1);
+    nCol(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))>0,:) = repmat(cind.node(2,:), sum(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))>0),1);
+    
+    % Isolate contrasts of interest
+   	a = (sum(abs(contrast) == abs(contrast(ind(c),:)),2)) == N.conditions;
+    
+    % Identify threshold of interest
+    thresh = find(storarray(:,ind(c)));
+    for t = 1:length(thresh)
         
-		% Compute mean distance map
-		map = nbs(thresh(t),:);
-		for m = 1:numel(map)
-			if iscell(map{m})
-				for n = 1:numel(map{m})
-					map{m}{n} = map{m}{n}.*mean(d, 3, 'omitnan')./10;	% this would be an excellent place to apply recursive programming
-				end
-			else
-				map{m} = map{m}.*mean(d, 3, 'omitnan')./10;
-			end
-		end
-		
-		% Plot glass brain
-		subplot(3, numel(thresh), t); hold on;
-		plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, labels_ROI, sphereScale, [], map, cind, strcont, [], rdux);
-		title(['Threshold ', num2str(tstat(t))], 'FontSize',12);
-		
-		% Set up subplots
-		ax(1) = subplot(3, numel(thresh), t+(numel(thresh))); grid on	% Plot significant connections as binarized connectivity map
-			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title('NBS Networks', 'FontSize',12);
-			set(ax(1), {'YTick','YTickLabel'}, {1:N.ROI, labels_ROI});
-            set(ax(1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, labels_ROI(5:5:N.ROI), -90});
-			pbaspect([1 1 1]);
-			% Calculate scatter Marker width in points
-			currentunits = get(ax(1),'Units');
-            set(ax(1),{'Color', 'Units', 'FontSize'},{'w', 'Points', 5, labels_ROI, labels_ROI(5:5:N.ROI)});
-			axpos = get(ax(1),'Position');
-			set(ax(1), 'Units', currentunits); hold on;
-			markerWidth(1) = 1/diff(xlim(ax(1)))*axpos(3);
-		ax(2) = subplot(3, numel(thresh), t+2*(numel(thresh)));	% distance map
-			colormap(ax(2),cool);
-            hold on; grid on
-			imagesc(ax(2), mean(d, 3, 'omitnan')); colorbar; hold on
-			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title('Mean EC Distance', 'FontSize',12);
-			set(ax(1), {'YTick','YTickLabel','FontSize'}, {1:N.ROI, labels_ROI, 5});
-            set(ax(1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, labels_ROI(5:5:N.ROI), -90});
-			pbaspect([1 1 1]);
-			% Calculate scatter Marker width in points
-			currentunits = get(ax(2),'Units');
-			set(ax(2), {'Units'}, {'Points'});
-			axpos = get(ax(2),'Position');
-			set(ax(2), 'Units', currentunits); hold on;
-			markerWidth(2) = 1/diff(xlim(ax(2)))*axpos(3);
-		
-        % Plot connectivity matrix & distance map
-		for m = 1:numel(map)
-            % scale transparency by strength
-            for n = 1:numel(map{m})
-                a(n) = sum(map{m}{n},'all');
-            end
-            a = a./max(a,[],'all','omitnan');
-            [~,ai(m)] = max(a);
+        %% Combined image
+        % Open figure & set axes
+        F(ind(c),t,1) = figure('Position', [0 0 1240 1024]);
+        ax(1,1) = subplot(6, 5, [1:2, 6:7, 11:12, 16:17, 21:22]); hold on;              % brain space network
+        ax(2,1) = subplot(6, 5, [3:5, 8:10, 13:15, 18:20, 23:25]); hold on; grid on;	% adjancecy matrix
+        ax(3,1) = subplot(6, 5, 26:30); hold on;                                        % membership bar chart
 
-            for n = 1:numel(map{m})
-                % Find & plot significant connections
-                [y, x] = find(map{m}{n});
-                scatter(ax(1), x, y, markerWidth(1)^2, cind.conn(m,:), 'filled', 's');
-
-                % Highlight mean EC matrix
-                [x, y] = find(map{m}{n});	% extract significant connections
-                s(n,m) = scatter(ax(2), y, x, markerWidth(2)^2, cind.conn(m,:), 's');
-            end
-		end
-		% Plot legend in mean EC matrix
-		legend(ax(2), [s(ai(1),1),s(ai(2),2)], strcont, 'Location','bestoutside');
-		clear ai
-	end
-	
-	% Save as PNG file, MATLAB figure
-	saveas(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'png');
-	savefig(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'compact');
-	
-elseif ~isempty(thresh) && strcmpi(render, 'single')
-	[thresh,~] = unique(thresh);
-	for t = 1:length(thresh)
-		
-		% Compute mean distance map
-		map = nbs(thresh(t),:);
-		for m = 1:numel(map)
-			if iscell(map{m})
-				for n = 1:numel(map{m})
-					map{m}{n} = map{m}{n}.*mean(d, 3, 'omitnan')./10;	% this would be an excellent place to apply recursive programming
-				end
-			else
-				map{m} = map{m}.*mean(d, 3, 'omitnan')./10;
-			end
-		end
-		
-		% Plot glass brain
-		F(t) = figure('Position', [0 0 1280 1024]);
-		subplot(2, 4, [3 4 7 8]); hold on;
-		plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, labels_ROI, sphereScale, [], map, cind, strcont, [], rdux);
-		title(['NBS Networks, Threshold ', num2str(tstat(t))], 'FontSize',12);
-		
-		% Set up subplots
-		ax(1) = subplot(2, 4, [5 6]); hold on; grid on	% Plot significant connections as binarized connectivity map				
-			title(['NBS Networks, Threshold ', num2str(tstat(t))], 'FontSize',12);
-			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			set(ax(1), {'YTick','YTickLabel'}, {1:N.ROI, labels_ROI});
-            set(ax(1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, labels_ROI(5:5:N.ROI), -90});
-			pbaspect([1 1 1]);
-			% Calculate scatter Marker width in points
-			currentunits = get(ax(1),'Units');
-            set(ax(1),{'Color', 'Units', 'FontSize'},{'w', 'Points', 5});
-			axpos = get(ax(1),'Position');
-			set(ax(1), 'Units', currentunits); hold on;
-			markerWidth(1) = 1/diff(xlim(ax(1)))*axpos(3);
-		ax(2) = subplot(2, 4, [1 2]); colormap(ax(2),cool); grid on     % distance map
-			imagesc(ax(2), mean(d, 3, 'omitnan')); colorbar; hold on
-			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title(['Mean Distance, ', labels{comps(1,1)}, ' to ', labels{comps(1,2)}, ' EC'], 'FontSize',12);
-			set(ax(1), {'YTick','YTickLabel','FontSize'}, {1:N.ROI, labels_ROI, 5});
-            set(ax(1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, labels_ROI(5:5:N.ROI), -90});
-			pbaspect([1 1 1]);
-			% Calculate scatter Marker width in points
-			currentunits = get(ax(2),'Units');
-			set(ax(2), {'Units'}, {'Points'});
-			axpos = get(ax(2),'Position');
-			set(ax(2), 'Units', currentunits); hold on;
-			markerWidth(2) = 1/diff(xlim(ax(2)))*axpos(3);
-		
-		for m = 1:numel(map)
-			% scale transparency by strength
-            for n = 1:numel(map{m})
-                a(n) = sum(map{m}{n},'all');
-            end
-            a = a./max(a,[],'all','omitnan');
-            [~,ai(m)] = max(a);
-
-            for n = 1:numel(map{m})
-                % Find & plot significant connections
-                [y, x] = find(map{m}{n});
-                scatter(ax(1), x, y, markerWidth(1)^2, cind.conn(m,:), 'filled', 's');
-
-                % Highlight mean EC matrix
-                [x, y] = find(map{m}{n});	% extract significant connections
-                s(n,m) = scatter(ax(2), y, x, markerWidth(2)^2, cind.conn(m,:), 's');
-            end
-		end
-		% Plot legend in mean EC matrix
-		legend(ax(2), s(1,:), strcont, 'Location','bestoutside', 'Orientation','horizontal');	
-		
-		% Save as PNG file, MATLAB figure
-		saveas(F(t), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')))), 'png');
-	end
-	
-	% Save as MATLAB figure
-	savefig(F, fullfile(path{5}, dirName, strcat(fN{1},"_NBS")), 'compact');
-	
-elseif ~isempty(thresh) && strcmpi(render, 'multiple')
-	imgs = cell(numel(unique(thresh)), numel(unique(cont)));
-	
-	for t = 1:length(thresh)
-		ind = [thresh(t), cont(t)];
-		for f = 1:numel(nbs{ind(1), ind(2)})
-			F(f) = figure('Position', [0 0 1280 1024]);
-
-			% Plot significant connections
-			ax(1) = subplot(2, 4, [1 2]); colormap(ax(1),bone); hold on; grid on
-			imagesc(full(nbs{ind(1), ind(2)}{f})); colorbar;
-			title(['NBS Network ', num2str(f)], 'FontSize',12);
-			set(ax(1), {'YTick','YTickLabel'}, {1:N.ROI, labels_ROI});
-            set(ax(1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, labels_ROI(5:5:N.ROI), -90});
-			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			pbaspect([1 1 1]);
-
-			% Extract significant connections
-			[sconns(:,1), sconns(:,2)] = find(nbs{ind(1), ind(2)}{f});
-			
-			% Calculate scatter marker width in points
-			ax(2) = subplot(2, 4, [5 6]); colormap(ax(2),cool); hold on; grid on
-			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			currentunits = get(ax(2),'Units');
-			set(ax(2), {'Units'}, {'Points'});
-			axpos = get(ax(2),'Position');
-			set(ax(2), 'Units', currentunits); hold on;
-			markerWidth(2) = 1/diff(xlim(ax(2)))*axpos(3);
-
-			% Highlight mean EC matrix
-			imagesc(mean(d, 3, 'omitnan')); colorbar; hold on
-			scatter(sconns(:,2), sconns(:,1), 10, 'g', 's');
-			title(['Mean Distance, ', labels{comps(1,1)}, ' to ', labels{comps(1,2)}, ' EC'], 'FontSize',12);
-			set(ax(1), {'YTick','YTickLabel'}, {1:N.ROI, labels_ROI});
-            set(ax(1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, labels_ROI(5:5:N.ROI), -90});
-			pbaspect([1 1 1]);
-
-			% Render in SPM
-			map = nbs{ind(1),ind(2)}{f}.*mean(d, 3, 'omitnan')./10;
-			ax = subplot(2, 4, [3 4 7 8]); hold on
-			plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, [], rdux);
+        % Set up adjacency matrix chart
+        set(ax(2,1), {'YLim','YTick','YTickLabel','FontSize'}, {[0.6 N.ROI+0.5], 1:N.ROI, labels_ROI, 5});
+        set(ax(2,1), {'XLim','XTick','XTickLabel','XTickLabelRotation'}, {[0.5 N.ROI+0.5], 5:5:N.ROI, labels_ROI(5:5:N.ROI), -45});
+        set(ax(2,1), {'Color', 'FontSize'},{'w', 6});
+        title(ax(2,1), "Significant Connections", 'FontSize',12);
+        pbaspect(ax(2,1), [1 1 1]);
         
-			% Title figure
-			sgtitle(['Threshold ', num2str(tstat(ind(1))), ', ', strcont{ind(2)}]);
+        % Set up node membership chart
+        set(ax(3,1),{'Color', 'FontSize'},{'w', 6});
+        set(ax(3,1), {'XLim','XTick','XTickLabel','XTickLabelRotation'}, {[1 N.ROI], 1:N.ROI, labels_ROI(5:5:N.ROI), -45});
+        yticklabels(ax(3,1), []);
+        title(ax(3,1), "Node Memberships", 'FontSize',12);
 
-			% Save as PNG file
-			saveas(F(f), fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'), '')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')), '_N', num2str(f))), 'png');
-			clear sconns
-		end
+        % Calculate scatter marker width in points
+        currentunits = get(ax(2,1),'Units');
+        set(ax(2,1), {'Units'}, {'Points'});
+        axpos = get(ax(2,1),'Position');
+        set(ax(2,1), 'Units', currentunits); hold on;
+        markerWidth = 1/diff(xlim(ax(2,1)))*axpos(3)-1;
+        
+        % Isolate contrasts of interest
+        map = nbs(thresh(t),a);
+        s = scatter([],[]);
+        nm{c,t} = zeros(N.ROI, N.conditions);
 
-		% Place figure(s) in cell array
-		imgs{ind(1), ind(2)} = F;
+        % Extract significant connections
+        for m = 1:numel(map)
+            for n = 1:numel(map{m})
+                [y, x] = find(map{m}{n});
 
-		% Save F
-		savefig(F, fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'),'')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')))));
-		clear F
-	end
-	
-	% Save as MATLAB figure
-	savefig(F, fullfile(path{5}, dirName, strcat(fN{1},"_NBS")), 'compact');
+                % Plot significant connections
+                s(1,m) = scatter(ax(2,1), x, y, markerWidth(1)^2, cind.conn(m,:), 'filled', 's');
+
+                % Label which nodes in which communities
+                nm{c,t}(unique(y),m) = nm{t}(unique(y),m)+ones(length(unique(y)), 1);
+            end
+        end
+
+        % Plot node roles
+        b = bar(ax(3,1), 1:N.ROI, nm{t}');              % connection type
+        s2 = scatter(ax(3,1), 1:N.ROI, zeros(1,N.ROI), 'filled');	% node type
+        for c2 = 1:nnz(a)
+            b(c2).FaceColor = cind.conn(c2,:);
+        end
+        s2.CData = nCol; clear c2 s2
+
+        % Render overall network in SPM
+        axes(ax(1,1));
+        plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, [], rdux);
+        sgtitle(F(ind(c),t,1), ['Threshold: t-statistic = ', num2str(tstat(thresh(t)))]);
+        title(ax(1,1), "All Components", 'FontSize',12);
+
+        % Plot legend in connectivity matrix
+        legend(ax(2,1), s, strcont(a), 'Location','southoutside', 'Color','w', 'FontSize',10);   %  'Orientation','horizontal',
+        clear s lgnd s2
+        
+        %% Individual components
+        F(ind(c),t,2) = figure('Position', [0 0 1280 1024]);
+        T = tiledlayout(F(ind(c),t,2), 'flow');
+
+        % Render individual components
+        for c2 = 1:size(map,2)
+            for f = 1:numel(map{:,c2})
+                % Generate directed graphs for each component
+                G = digraph(map{c2}{f}, labels_ROI);
+
+                % Isolate nodes & links of interest
+                [r,cl] = find(map{c2}{f});
+                S = subgraph(G, labels_ROI(union(r,cl)));
+
+                % Plot directed graphs per component
+                ax(f,2) = nexttile(T); hold on
+                plot(S, 'Layout','force', 'UseGravity',true, 'EdgeColor',cind.conn(c2,:), 'NodeColor',nCol(union(r,cl),:));
+                title(strcat("Contrast: ", strcont{c2}), 'FontSize',12);
+                subtitle(strcat("Component ", num2str(f)), 'FontSize',8);
+            end
+        end
+    end
 end
-clear K k n f t scomb ind nsig s thresh cont m n bin x y F fN i ax
+clear c f colind m n map a col climits ncomp T s r cl G S c2 t a
 
 
 %% Save results
