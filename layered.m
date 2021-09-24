@@ -1,134 +1,153 @@
-%% Set parameters
+%% Set paths
 
-% Legends
-strcont = {strjoin([labels.Properties.VariableNames(1), '<', labels.Properties.VariableNames(2)]), strjoin([labels.Properties.VariableNames(1), '>', labels.Properties.VariableNames(2)])};
+% Find general path (enclosing folder of current directory)
+path{1} = strsplit(pwd, '/');
+path{3,1} = strjoin(path{1}(1:end-1),'/');
+path{4,1} = strjoin(path{1}, '/');
+path{1,1} = strjoin(path{1}(1:end-2),'/');
+path{2,1} = fullfile(path{1},'MATLAB');
 
-% Set brain rendering parameters
-cortex.file = fullfile(path{3},'OCD','Data','MNI152_T1_2mm_brain_mask.nii');	% file containing cortical atlas
-cortex.color = [0.9 0.9 0.9];					% color for cortical rendering
-cortex.transparency = 0.1;						% set to 1 for opaque cortex
-cortex.val = 0.3;								% set isonormal line spacing
-cortex.view = [-90 90];							% set camera angle
-rdux = 0.7;						% proportion of surface faces to keep (<1)
+% Set required subdirectories
+path{5,1} = fullfile(path{3},'UCLA','Results','EC');
+path{6,1} = fullfile(path{3},'Atlases','AAL');
+
+% Add relevant paths
+addpath(genpath(fullfile(path{2}, 'BCT', 'NBS')));
+addpath(fullfile(path{2},'spm12'));
+addpath(genpath(fullfile(path{2}, 'mArrow3')));
+addpath(genpath(fullfile(path{2}, 'permutationTest')));
+addpath(genpath(fullfile(path{3}, 'Functions')));
+addpath(genpath(fullfile(path{3}, 'LEICA', 'Functions')));
+
+
+%% Visualization Settings
+
+% Define files to load
+fileName = 'LE_ICA_ControlIC*.mat';
+dirName = 'SubjectwithGroupPrior';
+fileName = dir(fullfile(path{5}, dirName, fileName));
+fileName = fileName.name;
+fN = strsplit(fileName, '_');
 
 % set color index
 cind.node = [1 0 0; 0 0 1];
-cind.conn = ['m'; 'c'];
+cind.conn = [1 0 1; 0 1 1];
+
+% locate significant components
+i = h{strcmpi(spaces, space)}(ttype,:);
 
 
-%% locate significant components
-j = h{:,'IC'};
-if numel(j) > 1
-	i = j{1};
-	for k = 2:numel(j)
-		i = union(i, j{k});
-	end
-	i = unique(i);
-else
-	i = j{:};
-end
-clear j
+%% Visualize each contrast separately
 
-
-%% Extract individual networks
-
-[ind(:,1), ind(:,2)] = find(storarray);
-fN = strsplit(fileName, '_');
+% Locate thresholds & contrasts with significant differences
+[~, ind] = find(storarray);
+ind = unique(ind); ind = ind(logical(mod(ind,2)));
 
 nm = cell(1,max(unique((ind))));
-compROIs = nm;
-for t = 1:max(unique((ind)))
+
+% Identify contrast of interest
+for c = 1:length(ind)
     
-    % Open figure
-    F(t,1) = figure('Position', [0 0 1240 1024]);
+    % Generate node color map
+    nCol = zeros(N.ROI, 3);
+    cont = strjoin(condName(logical(contrast(ind(c),:))), " v. ");          % Generate contrast label
+    nCol(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))<0,:) = repmat(cind.node(1,:), sum(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))<0),1);
+    nCol(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))>0,:) = repmat(cind.node(2,:), sum(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))>0),1);
     
-    % Plot significant connections as binarized connectivity map
-    ax(2,1) = subplot(4, 5, [3:5, 8:10, 13:15]); hold on; grid on
-	set(ax(2,1), {'YTick','YTickLabel','FontSize'}, {1:N.ROI, label_ROI, 5});
-    set(ax(2,1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, label_ROI(5:5:N.ROI), -90});
-    set(ax(2,1),{'Color', 'FontSize'},{'w', 6});
-    xlim([0.5 N.ROI+0.5]); ylim([0.6 N.ROI+0.5]);
-    title("Significant Connections", 'FontSize',12);
-    pbaspect([1 1 1]);
+    % Isolate contrasts of interest
+   	a = (sum(abs(contrast) == abs(contrast(ind(c),:)),2)) == N.conditions;
     
-    % Plot node memberships as bar chart
-    ax(3,1) = subplot(4, 5, 16:20); hold on
-    set(ax(3,1),{'Color', 'FontSize'},{'w', 6});
-    title("Node Memberships", 'FontSize',12);
-    
-    
-    % Calculate scatter Marker width in points
-    currentunits = get(ax(2,1),'Units');
-    set(ax(2,1), {'Units'}, {'Points'});
-	axpos = get(ax(2,1),'Position');
-	set(ax(2,1), 'Units', currentunits); hold on;
-	markerWidth = 1/diff(xlim(ax(2,1)))*axpos(3)-1;
-    
-    % Compute mean distance map & get number of components per threshold
-    map = nbs(ind(t,1),:); s = scatter([],[]); lgnd  = 0;
-    nm{t} = cell(size(map));
-    for c = 1:numel(map)
-%         for n = 1:numel(map{c})
-%             map{c}{n} = map{c}{n}.*mean(d, 3, 'omitnan')./10;	% this would be an excellent place to apply recursive programming
-%             a(n) = sum(map{c}{n},'all');                        % scale transparency by strength
-%         end
-%         [~,~,a] = find(a);
-%         a = a./max(a,[],'all','omitnan');
+    % Identify threshold of interest
+    thresh = find(storarray(:,ind(c)));
+    for t = 1:length(thresh)
+        
+        %% Combined image
+        % Open figure & set axes
+        F(ind(c),t,1) = figure('Position', [0 0 1240 1024]);
+        ax(1,1) = subplot(6, 5, [1:2, 6:7, 11:12, 16:17, 21:22]); hold on;              % brain space network
+        ax(2,1) = subplot(6, 5, [3:5, 8:10, 13:15, 18:20, 23:25]); hold on; grid on;	% adjancecy matrix
+        ax(3,1) = subplot(6, 5, 26:30); hold on;                                        % membership bar chart
+
+        % Set up adjacency matrix chart
+        set(ax(2,1), {'YLim','YTick','YTickLabel','FontSize'}, {[0.6 N.ROI+0.5], 1:N.ROI, labels_ROI, 5});
+        set(ax(2,1), {'XLim','XTick','XTickLabel','XTickLabelRotation'}, {[0.5 N.ROI+0.5], 5:5:N.ROI, labels_ROI(5:5:N.ROI), -45});
+        set(ax(2,1), {'Color', 'FontSize'},{'w', 6});
+        title(ax(2,1), "Significant Connections", 'FontSize',12);
+        pbaspect(ax(2,1), [1 1 1]);
+        
+        % Set up node membership chart
+        set(ax(3,1),{'Color', 'FontSize'},{'w', 6});
+        set(ax(3,1), {'XLim','XTick','XTickLabel','XTickLabelRotation'}, {[1 N.ROI], 1:N.ROI, labels_ROI(5:5:N.ROI), -45});
+        yticklabels(ax(3,1), []);
+        title(ax(3,1), "Node Memberships", 'FontSize',12);
+
+        % Calculate scatter marker width in points
+        currentunits = get(ax(2,1),'Units');
+        set(ax(2,1), {'Units'}, {'Points'});
+        axpos = get(ax(2,1),'Position');
+        set(ax(2,1), 'Units', currentunits); hold on;
+        markerWidth = 1/diff(xlim(ax(2,1)))*axpos(3)-1;
+        
+        % Isolate contrasts of interest
+        map = nbs(thresh(t),a);
+        s = scatter([],[]);
+        nm{c,t} = zeros(N.ROI, N.conditions);
 
         % Extract significant connections
-        nm{t}{c} = zeros(numel(label_ROI), numel(map{c}));
-        for n = 1:numel(map{c})
-            [y, x] = find(map{c}{n});
-            col = cind.conn + (n-1)/(max(numel(map{c})-1,1)).*[0 0 1; 0 1 0];
-            % col = [a(n) 1-a(n) 0; 0 1-a(n), a(n)];
-            
-            % Plot significant connections
-            s(end+1,1) = scatter(ax(2,1), x, y, markerWidth(1)^2, cind.conn(c,:), 'filled', 's');
-            lgnd(end+1,1) = c;
-            
-            % Label which nodes in which communities
-            nm{t}{c}(unique(y),n) = ones(length(unique(y)), 1);
+        for m = 1:numel(map)
+            for n = 1:numel(map{m})
+                [y, x] = find(map{m}{n});
+
+                % Plot significant connections
+                s(1,m) = scatter(ax(2,1), x, y, markerWidth(1)^2, cind.conn(m,:), 'filled', 's');
+
+                % Label which nodes in which communities
+                nm{c,t}(unique(y),m) = nm{t}(unique(y),m)+ones(length(unique(y)), 1);
+            end
         end
-        nm{t}{c} = (-nm{t}{c}).^(c+1);
-    end
-    delete(s(1,:)); s(1,:) = []; lgnd(1,:) = [];
-    
-    % Plot node roles
-    nm{t} = cell2mat(nm{t});
-    bar(ax(3,1), categorical(label_ROI), nm{t});
-    
-    % List nodes in each component
-    compROIs{t} = repmat(label_ROI, [1 size(nm{t},2)]);
-    compROIs{t}(~logical(nm{t})) = "-";
-    
-    % Render overall network in SPM
-    ax(1,1) = subplot(4, 5, [1:2, 6:7, 11:12]); hold on;
-    plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, labels_ROI, sphereScale, [], map, cind, strcont, [], rdux);
-    sgtitle(F(t,1), ['Threshold: t-statistic = ', num2str(tstat(ind(t,1)))]);
-    title(ax(1,1), "All Components", 'FontSize',12);
-    
-    % Plot legend in connectivity matrix
-    legend(ax(2,1), s(:,1), strcont(lgnd), 'Location','bestoutside', 'Color','w', 'FontSize',10);   %  'Orientation','horizontal',
-    clear s lgnd
 
+        % Plot node roles
+        b = bar(ax(3,1), 1:N.ROI, nm{t}');              % connection type
+        s2 = scatter(ax(3,1), 1:N.ROI, zeros(1,N.ROI), 'filled');	% node type
+        for c2 = 1:nnz(a)
+            b(c2).FaceColor = cind.conn(c2,:);
+        end
+        s2.CData = nCol; clear c2 s2
 
-    %% Set up figure for individual components
-    F(t,2) = figure('Position', [0 0 1280 1024]);
-    T = tiledlayout(F(t,2), 'flow');
-    
-    % Render individual components in SPM
-    colind = cind;
-    for c = 1:size(map,2)
-        colind.conn = cind.conn(c,:);
-        for f = 1:numel(map{:,c})
-            ax(f,2) = nexttile(T); hold on
-            plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, labels_ROI, sphereScale, [], map{c}{f}, colind, [], [], rdux);
-            title(strcat("Contrast: ", strcont{c}), 'FontSize',12);
-            subtitle(strcat("Component ", num2str(f)), 'FontSize',8);
+        % Render overall network in SPM
+        axes(ax(1,1));
+        plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, [], rdux);
+        sgtitle(F(ind(c),t,1), ['Threshold: t-statistic = ', num2str(tstat(thresh(t)))]);
+        title(ax(1,1), "All Components", 'FontSize',12);
+
+        % Plot legend in connectivity matrix
+        legend(ax(2,1), s, strcont(a), 'Location','southoutside', 'Color','w', 'FontSize',10);   %  'Orientation','horizontal',
+        clear s lgnd s2
+        
+        %% Individual components
+        F(ind(c),t,2) = figure('Position', [0 0 1280 1024]);
+        T = tiledlayout(F(ind(c),t,2), 'flow');
+
+        % Render individual components
+        for c2 = 1:size(map,2)
+            for f = 1:numel(map{:,c2})
+                % Generate directed graphs for each component
+                G = digraph(map{c2}{f}, labels_ROI);
+
+                % Isolate nodes & links of interest
+                [r,cl] = find(map{c2}{f});
+                S = subgraph(G, labels_ROI(union(r,cl)));
+
+                % Plot directed graphs per component
+                ax(f,2) = nexttile(T); hold on
+                plot(S, 'Layout','force', 'UseGravity',true, 'EdgeColor',cind.conn(c2,:), 'NodeColor',nCol(union(r,cl),:));
+                title(strcat("Contrast: ", strcont{c2}), 'FontSize',12);
+%                 subtitle(strcat("Component ", num2str(f)), 'FontSize',8);
+            end
         end
     end
 end
-clear c f colind m n map a col climits ncomp T s
+clear c f colind m n map a col climits ncomp T s r cl G S c2 t a
 
 
 %% Save figures

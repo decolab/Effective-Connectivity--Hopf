@@ -21,15 +21,6 @@ clear; close all; clc;
 % Set global variables
 global activation entro dsig bfilt afilt C a W N T omega G co aType cfType;
 
-% Define file to analyze
-fileName = 'LE_ICA_ControlIC_COS_ALL_wideband_k1_Iteration1';
-
-% Set EC type to compute
-tofit = 'IC';			% 'ROI' to fit by region, 'ICA' to fit by assembly
-typeoffit = 'Subject with Group Prior';
-mecDist = 'seuclidean';
-cfType = 'eucEntro';
-
 
 %% Set paths & directories
 
@@ -46,7 +37,7 @@ path{2,1} = fullfile(path{1},'MATLAB');
 
 % Set required subdirectories
 path{5,1} = fullfile(path{3},'UCLA','Data');
-path{6,1} = fullfile(path{3},'UCLA','Results','LEICA','GroupIC');
+path{6,1} = fullfile(path{3},'UCLA','Results','LEICA','CommonIC');
 path{7,1} = fullfile(path{3},'UCLA','Results','EC');
 
 % Add relevant paths
@@ -61,26 +52,20 @@ clear fpath k
 
 %% Set file names & load data
 
-% Load data
-e = load(fullfile(path{6}, fileName), 'labels_ROI', 'activities', 'entro','memberships','I','co','W','T','N','C', 'labels','dFC', 'aType');
-activities = e.activities;
-sEntro = e.entro;
-memberships = e.memberships;
-comps = e.C;
-co = e.co;
-W = e.W;
-T = e.T;
-N = e.N;
-N.comp = N.IC; N = rmfield(N, 'IC');
-I = e.I;
-dFC = e.dFC;
-aType = e.aType;
-clear e
+% Define file to analyze
+fileName = 'LE_ICA_CommonIC_COS_ALL_wideband_k1_Iteration2';
 
-% Load network labels
-labels_ROI = load(fullfile(path{5}, 'formattedUCLA.mat'));   % load(fullfile(path{3}, 'Atlases', 'AAL', 'AAL_labels'));
-labels_ROI = labels_ROI.labels_ROI; % string(labels_ROI.label90);
-% labels_ROI = strip(LR_version_symm(labels_ROI));
+% Set EC type to compute
+space = 'IC';			% 'ROI' to fit by region, 'ICA' to fit by assembly
+typeoffit = 'Subject with Group Prior';
+mecDist = 'seuclidean';
+cfType = 'eucEntro';
+
+% Load data
+load(fullfile(path{6}, fileName), 'labels_ROI','coords_ROI', 'activities', 'entro','memberships','I','co','W','T','N','C', 'labels','dFC', 'aType');
+sEntro = entro; clear entro
+comps = C; clear C
+N.comp = N.IC; N = rmfield(N, 'IC');
 
 % Reset N.fig
 N.fig = 1;
@@ -158,8 +143,8 @@ switch typeoffit
 	case 'Subject'
 		% Preallocate EC matrices
 		EC = nan(N.ROI, N.ROI, N.conditions, max(N.subjects));	% EC matrices
-		alpha = nan(N.ROI, 2, N.conditions, max(N.subjects));		% bifurcation parameters
-		fval = nan(max(N.subjects), N.conditions);		% cost function
+		alpha = nan(N.ROI, 2, N.conditions, max(N.subjects));	% bifurcation parameters
+		fval = nan(max(N.subjects), N.conditions);              % cost function
 
 		% Compute EC per subject
 		for c = 1:N.conditions
@@ -308,7 +293,8 @@ switch typeoffit
 						end
 					end
 				end
-			end
+            end
+            EC(:,:,c,N.subjects(c)+1:max(N.subjects)) = nan(N.ROI, N.ROI, max(N.subjects)-N.subjects(c));
 		end
 end
 clear x i j s c a ng nn omega entro lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90

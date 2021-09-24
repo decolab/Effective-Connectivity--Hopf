@@ -38,33 +38,78 @@ addpath(genpath(fullfile(path{3}, 'Functions')));
 addpath(genpath(fullfile(path{3}, 'LEICA', 'Functions')));
 
 
-%% Visualization Settings
+%% Load and format EC data
 
 % Define files to load
-fileName = 'LE_ICA_ControlIC*.mat';
+fileName = 'LE_ICA_CIC*.mat';
 dirName = 'SubjectwithGroupPrior';
 fileName = dir(fullfile(path{5}, dirName, fileName));
 fileName = fileName.name;
 
+% Load EC data
+load(fullfile(path{5}, dirName, fileName), 'spaces','labels','coords_ROI','labels_ROI','EC','I','N','condName','comps','mecDist','memberships','h');
+
+% Convert index format
+ind = zeros(max(N.subjects), N.conditions);
+[r,col] = find(I);
+n = 0;
+for c = 1:N.conditions
+	ind(1:N.subjects(c),c) = I(r(col==c), c);
+    n = n + N.subjects(c);
+end
+clear r c col n
+
+% Set formatting indices
+ind = logical(ind);
+i = logical(I);
+
+
+%% NBS Settings
+
 % Analysis Settings
 intercept = false;	% determines whether to use intercept term in NBS
 
-% Load network labels
-% labels_ROI = load(fullfile(path{6},'AAL_labels.mat'));
-% labels_ROI = string(labels_ROI.label90);			% Convert labels to strings
-% labels_ROI = strip(LR_version_symm(labels_ROI));	% Convert labels to symmetric format
+% Check if need intercept term
+if intercept == true
+	I = horzcat(ones(size(I,1),1), I);
+end
+
+% Set arrays for parameter sweeps
+tstat = 4:0.5:6;
+
+% Allocate contrast matrices
+contrast = zeros((size(comps,1)+size(I,2))*2, size(I,2));
+strcont = cell((size(comps,1)+size(I,2))*2, 1);
+
+% Set all-way contrasts
+c = 2*(size(comps,1)+1:size(comps,1)+N.conditions);
+contrast(c-1, :) = -ones(size(I,2), size(I,2)) + diag(2*ones(N.conditions,1));
+contrast(c, :) = ones(size(I,2), size(I,2)) - diag(2*ones(N.conditions,1));
+for c = 2*(size(comps,1)+1:size(comps,1)+N.conditions)
+    strcont{c-1} = strjoin([condName((c-2*size(comps,1))/2), '> ALL']);
+    strcont{c} = strjoin([condName((c-2*size(comps,1))/2), '< ALL']);
+end
+
+% Set pairwise contrasts
+for c = 2*(1:size(comps,1))
+    contrast(c-1, comps(c/2,:)) = [1 -1];
+    contrast(c, comps(c/2,:)) = [-1 1];
+    strcont{c-1} = strjoin([condName(comps(c/2,1)), '>', condName(comps(c/2,2))]);
+    strcont{c} = strjoin([condName(comps(c/2,1)), '<', condName(comps(c/2,2))]);
+end
+
+
+%% Visualization Settings
 
 % Generate MNI coordinates
-coords_ROI = load(fullfile(path{6}, 'aal_cog.txt'), 'aal_cog');
-coords_ROI = LR_version_symm(coords_ROI);
-origin = [65 45.5 35];							% center origin
-MNIscale = 5.5/10;								% scale MNI coordinates
-sphereScale = 2.5;								% scale sphere size
-coords_ROI = MNIscale*coords_ROI;			% scale MNI coordinates
-clear label90 MNIscale
+origin = [63 45.5 35];				% center origin
+MNIscale = 5.5/10;					% scale MNI coordinates
+sphereScale = 2.5;					% scale sphere size
+coords_ROI = MNIscale*coords_ROI;	% scale MNI coordinates
+clear MNIscale
 
 % Set brain rendering parameters
-cortex.file = fullfile(path{3},'OCD','Data','MNI152_T1_2mm_brain_mask.nii');	% file containing cortical atlas
+cortex.file = fullfile(path{6},'MNI152_T1_2mm_brain_mask.nii');	% file containing cortical atlas
 cortex.color = [0.9 0.9 0.9];					% color for cortical rendering
 cortex.transparency = 0.1;						% set to 1 for opaque cortex
 cortex.val = 0.3;								% set isonormal line spacing
@@ -91,59 +136,6 @@ render = 'layered';         % Number of images to generate per threshold.
 fN = strsplit(fileName, '_');
 
 
-%% Load and format EC data
-
-% Load EC data
-load(fullfile(path{5}, dirName, fileName), 'labels_ROI','EC','I','N','condName','comps','mecDist','memberships','h');
-
-% Convert index format
-ind = zeros(max(N.subjects), N.conditions);
-[r,col] = find(I);
-n = 0;
-for c = 1:N.conditions
-	ind(1:N.subjects(c),c) = I(r(col==c), c);
-    n = n + N.subjects(c);
-end
-clear r c col n
-
-% Set formatting indices
-ind = logical(ind);
-i = logical(I);
-
-% Check if need intercept term
-if intercept == true
-	I = horzcat(ones(size(I,1),1), I);
-end
-
-% Set arrays for parameter sweeps
-tstat = 4:0.5:6;
-
-% Allocate contrast matrices
-contrast = zeros((size(comps,1)+size(I,2))*2, size(I,2));
-strcont = cell((size(comps,1)+size(I,2))*2, 1);
-
-% Set all-way contrasts
-contrast(2*size(comps,1)+1:2*(size(comps,1))+size(I,2), :) = -ones(size(I,2), size(I,2)) + diag(2*ones(size(I,2),1));
-contrast(2*size(comps,1)+size(I,2)+1:2*(size(comps,1)+size(I,2)), :) = ones(size(I,2), size(I,2)) - diag(2*ones(size(I,2),1));
-for c = 2*size(comps,1)+1:2*(size(comps,1))+size(I,2)
-    strcont{c} = strjoin([condName(c-2*size(comps,1)), '> ALL']);
-    strcont{c+size(I,2)} = strjoin([condName(c-2*size(comps,1)), '< ALL']);
-end
-
-% Set pairwise contrasts
-for c = 1:size(comps,1)
-    contrast(c, comps(c,:)) = [1 -1];
-    contrast(c+size(comps,1), comps(c,:)) = [-1 1];
-    strcont{c} = strjoin([condName(comps(c,1)), '>', condName(comps(c,2))]);
-    strcont{c+size(comps,1)} = strjoin([condName(comps(c,1)), '<', condName(comps(c,2))]);
-end
-
-% Sort contrasts
-[~,k] = sort(horzcat(1:2:2*size(comps,1), 2:2:2*size(comps,1)));
-contrast(1:2*size(comps,1),:) = contrast(k,:);
-strcont(1:2*size(comps,1)) = strcont(k);
-
-
 %% Set parameter sweep for NBS
 
 % Format EC data to NxNxM
@@ -152,7 +144,7 @@ EC = zeros(N.ROI, N.ROI, sum(N.subjects));
 for c = 1:N.conditions
 	EC(:,:,i(:,c)) = squeeze(C(:,:,c,ind(:,c)));
 end
-clear C c ind n i
+clear c ind n i C
 
 % Set storage arrays
 storarray = nan(length(tstat), size(contrast,1));
@@ -180,105 +172,137 @@ for c = 1:size(contrast,1)
 		storarray(t, c) = ~isempty(nbs{t,c});
 	end
 end
-clear t c contrast
+clear t c
 
 % Save results
-save(fullfile(path{5}, dirName, fileName(1:end-4)), 'nbs','STATS','GLM','tstat','storarray', '-append');
+save(fullfile(path{5}, dirName, fileName(1:end-4)), 'contrast','strcont','ttype','space','nbs','STATS','GLM','tstat','storarray', '-append');
 
 
 %% Run node strength analyses
-% 
-% % Declare strength array
-% stronk = nan(N.ROI, N.conditions, max(N.subjects), 2);
-% 
-% % Compute in-strength and out-strength
-% stronk(:,:,:,1) = squeeze(sum(EC, 2));	% In-strength: sum over rows
-% stronk(:,:,:,2) = squeeze(sum(EC, 1));	% Out-strength: sum over columns
-% 
-% % Run comparisions
-% for c = 1:size(comps,1)
-%     [instr.h(:,c), instr.p(:,c), instr.tstat(:,c), instr.FDR(:,c), instr.Bonferroni(:,c), instr.Sidak(:,c)] = ...
-%         robustTests(stronk(:,comps(c,1),1:N.subjects(comps(c,1)),1), stronk(:,comps(c,2),1:N.subjects(comps(c,2)),1), N.ROI, 'p',0.05, 'testtype','permutation');
-%     [outstr.h(:,c), outstr.p(:,c), outstr.tstat(:,c), outstr.FDR(:,c), outstr.Bonferroni(:,c), outstr.Sidak(:,c)] = ...
-%         robustTests(stronk(:,comps(c,1),1:N.subjects(comps(c,1)),2), stronk(:,comps(c,2),1:N.subjects(comps(c,2)),2), N.ROI, 'p',0.05, 'testtype','permutation');
-% end
-% 
-% % Run multiple-comparison corrections for strength
-% if size(comps,1) > 1
-%     % in-strength
-%     p_dum = reshape(instr.p, [size(comps,1)*N.ROI, 1]);	% reshape p-value array
-%     [f, B, S] = mCompCorr([], p_dum, 0.05);			% run mutliple comparison tests
-%     instr.FDR = reshape(f, [N.ROI, size(comps,1)]);        % False-Discovery Rate
-%     instr.Bonferroni = reshape(B, [N.ROI, size(comps,1)]);	% Bonferroni threshold
-% 	instr.Sidak = reshape(S, [N.ROI, size(comps,1)]);      % Sidak threshold
-%     % out-strength
-%     p_dum = reshape(outstr.p, [size(comps,1)*N.ROI, 1]);	% reshape p-value array
-%     [f, B, S] = mCompCorr([], p_dum, 0.05);			% run multiple comparison tests
-%     outstr.FDR = reshape(f, [N.ROI, size(comps,1)]);       % False-Discovery Rate
-%     outstr.Bonferroni = reshape(B, [N.ROI, size(comps,1)]);	% Bonferroni threshold
-% 	outstr.Sidak = reshape(S, [N.ROI, size(comps,1)]);     % Sidak threshold
-% end
-% clear f B S p_dum
-% 
-% % Tabulate FDR results
-% strength.summary = table(instr.FDR, outstr.FDR, 'RowNames',labels_ROI, 'VariableNames',{'In','Out'});
-% 
-% % Format labels for strength results
-% instr = horzcat(squeeze(stronk(:,2,:,1))', squeeze(stronk(:,1,:,1))');
-% outstr = horzcat(squeeze(stronk(:,2,:,2))', squeeze(stronk(:,1,:,2))');
-% lbl = {repmat(labels_ROI, [2 1]), cat(1, repmat(string(condName{2}),[N.ROI 1]), repmat(string(condName{1}),[N.ROI 1]))};
-% cg = repmat(['r';'b'],[N.ROI 1]);
-% [r, c] = find(strength.summary{:,:});
-% c = unique(c); r = unique(r);
-% 
-% % Visualize strength results
-% S = figure('Position', [0 0 1280 1024]);
-% ax = subplot(3, nnz(strength.summary{:,:}), [1 nnz(strength.summary{:,:})]);
-% boxplot(ax, instr, lbl, 'PlotStyle','compact', 'Notch','on', 'ColorGroup',cg); hold on;
-% title('In-Strength');
-% scatter(r(c==1), (max(instr,[],'all','omitnan')+0.1).*ones(1,nnz(c==1)), 36, 'r', '*');
-% ax = subplot(3, nnz(strength.summary{:,:}), [1+nnz(strength.summary{:,:}) 2*nnz(strength.summary{:,:})]);
-% boxplot(ax, outstr, lbl, 'PlotStyle','compact', 'Notch','on', 'ColorGroup',cg); hold on;
-% title('Out-Strength');
-% scatter(r(c==2), (max(outstr,[],'all','omitnan')+0.1).*ones(1,nnz(c==2)), 36, 'r', '*');
-% for n = 1:nnz(strength.summary{:,:})
-% 	f = figure; hold on;
-% 	hg{1} = histogram(squeeze(stronk(r(n),1,:,c(n))), 'Normalization','probability');
-% 	hg{2} = histogram(squeeze(stronk(r(n),2,:,c(n))), 'Normalization','probability');
-% 	sz = min(hg{1}.BinWidth, hg{2}.BinWidth);
-% 	close(f);
-% 	
-% 	figure(S);
-% 	ax = subplot(3, nnz(strength.summary{:,:}), 2*nnz(strength.summary{:,:})+n);
-% 	histogram(squeeze(stronk(r(n),1,:,c(n))), 'Normalization','probability', 'BinWidth',sz, 'FaceAlpha',0.5); hold on;
-% 	histogram(squeeze(stronk(r(n),2,:,c(n))), 'Normalization','probability', 'BinWidth',sz, 'FaceAlpha',0.5);
-% 	legend(condName);
-% 	title(['Modeled ', strength.summary.Properties.VariableNames{c(n)}, '-Strength of ', labels_ROI{r(n)}]);
-% end
-% clear n ax r c lbl f cg % stronk instr outstr
-% 
-% % Save strength figure
-% % savefig(S, fullfile(path{5}, dirName, strcat(fN{1}, '_strength')), 'compact');
-% % saveas(S, fullfile(path{5}, dirName, strcat(fN{1}, '_strength')), 'png');
-% 
-% % Save results
-% save(fullfile(path{5}, dirName, fileName(1:end-4)), 'strength', '-append');
+
+% Index strength analyses
+index = ["out"; "in"];
+
+% Compute in-strength and out-strength arrays
+for i = 1:numel(index)
+    strength.(index(i)).array = squeeze(sum(EC, i, 'omitnan'));
+end
+
+% Run comparisions
+vn = cell(size(comps,1), 1);
+for c = 1:size(comps,1)
+    for i = 1:numel(index)
+        [strength.(index(i)).h(:,c), strength.(index(i)).p(:,c), strength.(index(i)).tstat(:,c), strength.(index(i)).FDR(:,c), strength.(index(i)).Bonferroni(:,c), strength.(index(i)).Sidak(:,c)] = ...
+        robustTests(strength.(index(i)).array(:,I(:,comps(c,1))), strength.(index(i)).array(:,I(:,comps(c,2))), N.ROI, 'p',0.05, 'testtype','permutation');
+    end
+    vn{c} = [labels{comps(c,1)}, ' v. ', labels{comps(c,2)}];
+end
+vn = string(vn);
+
+% Run multiple-comparison corrections for strength
+if size(comps,1) > 1
+    for i = 1:numel(index)
+        p_dum = reshape(strength.(index(i)).p, [size(comps,1)*N.ROI, 1]);		% reshape p-value array
+        [f, B, S] = mCompCorr([], p_dum, 0.05);									% run mutliple comparison tests
+        strength.(index(i)).FDR = reshape(f, [N.ROI, size(comps,1)]);			% False-Discovery Rate
+        strength.(index(i)).Bonferroni = reshape(B, [N.ROI, size(comps,1)]);	% Bonferroni threshold
+        strength.(index(i)).Sidak = reshape(S, [N.ROI, size(comps,1)]);			% Sidak threshold
+    end
+end
+clear f B S p_dum
+
+% Convert comparisons to table
+if size(comps,1) > 1
+    for i = 1:numel(index)
+        strength.(index(i)).p = array2table(strength.(index(i)).p, 'RowNames',labels_ROI, 'VariableNames',vn);						% p-value
+        strength.(index(i)).h = array2table(strength.(index(i)).h, 'RowNames',labels_ROI, 'VariableNames',vn);						% uncorrected hypothesis test
+        strength.(index(i)).tstat = array2table(strength.(index(i)).tstat, 'RowNames',labels_ROI, 'VariableNames',vn);				% test statistic (t-statistic or Hodges' G)
+        strength.(index(i)).FDR = array2table(strength.(index(i)).FDR, 'RowNames',labels_ROI, 'VariableNames',vn);					% False-Discovery Rate
+        strength.(index(i)).Bonferroni = array2table(strength.(index(i)).Bonferroni, 'RowNames',labels_ROI, 'VariableNames',vn);	% Bonferroni threshold
+        strength.(index(i)).Sidak = array2table(strength.(index(i)).Sidak, 'RowNames',labels_ROI, 'VariableNames',vn);				% Sidak threshold
+    end
+end
+
+% Visualize strength results for each comparison (if any)
+t = 0;
+for c = 1:size(comps,1)
+    % Tabulate FDR results
+    FDR = table(strength.in.FDR{:,vn(c)}, strength.out.FDR{:,vn(c)}, 'RowNames',labels_ROI, 'VariableNames',{'In','Out'});
+    
+    % Check if any significant results: if not, do not plot
+    if nnz(FDR{:,:}) > 0
+        t = t+1;
+        
+        % Find significant differences
+        [r, col] = find(FDR{:,:});
+        
+        % Preallocate instrength, outstrength indices
+        instr = nan(N.ROI, size(I,1));
+        outstr = instr;
+        cg = [];
+        
+        % Isolate strength results for boxplot
+        for c2 = 1:size(comps,2)
+            instr(:, I(:,comps(c,c2))) = squeeze(strength.in.array(:, I(:,comps(c,c2))));
+            outstr(:, I(:,comps(c,c2))) = squeeze(strength.out.array(:, I(:,comps(c,c2))));
+            cg = vertcat(cg, repmat(string(labels{comps(c,c2)}), [nnz(I(:,comps(c,c2))), 1]));
+        end
+        instr(:, ~sum(I(:,comps(c,:)),2)) = [];
+        outstr(:, ~sum(I(:,comps(c,:)),2)) = [];
+        
+        % Format data, group labels for boxplot
+        lbl = repmat(labels_ROI, [size(instr,2), 1]);
+        cg = repmat(cg, [N.ROI, 1]);
+        lbl = {lbl, cg};
+        instr = reshape(instr, [numel(instr), 1]);
+        outstr = reshape(outstr, [numel(outstr), 1]);
+
+        % Visualize in-strength results
+        S(t) = figure('Position', [0 0 1280 1024]);
+        ax = subplot(3, nnz(FDR{:,:}), [1 nnz(FDR{:,:})]);
+        boxplot(ax, instr, lbl, 'PlotStyle','compact', 'Notch','on', 'ColorGroup',cg, 'Colors',cind.node); hold on;
+        title(['In-Strength: ', vn{c}]);
+        scatter(r(col==1), (max(instr,[],'all','omitnan')+0.1).*ones(1,nnz(col==1)), 36, 'r', '*');
+
+        % Visualize out-strength results
+        ax = subplot(3, nnz(FDR{:,:}), [1+nnz(FDR{:,:}) 2*nnz(FDR{:,:})]);
+        boxplot(ax, outstr, lbl, 'PlotStyle','compact', 'Notch','on', 'ColorGroup',cg, 'Colors',cind.node); hold on;
+        title(['Out-Strength: ', vn{c}]);
+        scatter(r(col==2), (max(outstr,[],'all','omitnan')+0.1).*ones(1,nnz(col==2)), 36, 'r', '*');
+
+        % Visualize significant nodes
+        for n = 1:nnz(FDR{:,:})
+            f = figure; hold on;
+            hg{1} = histogram(strength.(index(col(n))).array(r(n),I(:,comps(c,2))), 'Normalization','probability');
+            hg{2} = histogram(strength.(index(col(n))).array(r(n),I(:,comps(c,1))), 'Normalization','probability');
+            sz = min(hg{1}.BinWidth, hg{2}.BinWidth);
+            close(f);
+
+            figure(S(t));
+            ax = subplot(3, nnz(FDR{:,:}), 2*nnz(FDR{:,:})+n);
+            for c2 = 1:size(comps,2)
+                histogram(strength.(index(col(n))).array(r(n),I(:,comps(c,c2)),:), 'Normalization','probability', 'BinWidth',sz, 'FaceAlpha',0.5, 'FaceColor',cind.node(c2,:)); hold on;
+            end
+            legend(labels(comps(c,:)));
+            title(['Modeled ', FDR.Properties.VariableNames{col(n)}, '-Strength of ', labels_ROI{r(n)}]);
+        end
+    end
+end
+clear n ax r c lbl f cg instr outstr i c2 col t index vn
+
+
+% Save strength figures
+savefig(S, fullfile(path{5}, dirName, strcat(fN{1}, '_strength')), 'compact');
+clear S
+
+% Save results
+save(fullfile(path{5}, dirName, fileName(1:end-4)), 'strength', '-append');
 
 
 %% Visualize NBS results
 
 % locate significant components
-j = h{:,2};  % h{:,'IC'};
-if size(j,2) > 1
-	i = j{'permutation',1};
-	for k = 2:size(j,2)
-		i = union(i, j{k});
-	end
-	i = unique(i);
-else
-	i = j{:};
-end
-clear j
+i = h{strcmpi(spaces, space)}(ttype,:);
 
 % Find average distance between groups
 k(1) = comps(1,1); k(2) = comps(1,2);
@@ -297,7 +321,7 @@ if ~isempty(thresh) && strcmpi(render, 'compare')
 	[thresh,~] = unique(thresh);
 	F = figure('Position', [0 0 1280 1024]);
 	for t = 1:numel(thresh)
-		
+        
 		% Compute mean distance map
 		map = nbs(thresh(t),:);
 		for m = 1:numel(map)
@@ -369,8 +393,8 @@ if ~isempty(thresh) && strcmpi(render, 'compare')
 	end
 	
 	% Save as PNG file, MATLAB figure
-	% saveas(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'png');
-	% savefig(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'compact');
+	saveas(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'png');
+	savefig(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'compact');
 	
 elseif ~isempty(thresh) && strcmpi(render, 'single')
 	[thresh,~] = unique(thresh);
@@ -410,7 +434,7 @@ elseif ~isempty(thresh) && strcmpi(render, 'single')
 		ax(2) = subplot(2, 4, [1 2]); colormap(ax(2),cool); grid on     % distance map
 			imagesc(ax(2), mean(d, 3, 'omitnan')); colorbar; hold on
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title(['Mean Distance, ', condName{comps(1,1)}, ' to ', condName{comps(1,2)}, ' EC'], 'FontSize',12);
+			title(['Mean Distance, ', labels{comps(1,1)}, ' to ', labels{comps(1,2)}, ' EC'], 'FontSize',12);
 			set(ax(1), {'YTick','YTickLabel','FontSize'}, {1:N.ROI, labels_ROI, 5});
             set(ax(1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, labels_ROI(5:5:N.ROI), -90});
 			pbaspect([1 1 1]);
@@ -443,11 +467,11 @@ elseif ~isempty(thresh) && strcmpi(render, 'single')
 		legend(ax(2), s(1,:), strcont, 'Location','bestoutside', 'Orientation','horizontal');	
 		
 		% Save as PNG file, MATLAB figure
-		% saveas(F(t), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')))), 'png');
+		saveas(F(t), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')))), 'png');
 	end
 	
 	% Save as MATLAB figure
-	% savefig(F, fullfile(path{5}, dirName, strcat(fN{1},"_NBS")), 'compact');
+	savefig(F, fullfile(path{5}, dirName, strcat(fN{1},"_NBS")), 'compact');
 	
 elseif ~isempty(thresh) && strcmpi(render, 'multiple')
 	imgs = cell(numel(unique(thresh)), numel(unique(cont)));
@@ -481,7 +505,7 @@ elseif ~isempty(thresh) && strcmpi(render, 'multiple')
 			% Highlight mean EC matrix
 			imagesc(mean(d, 3, 'omitnan')); colorbar; hold on
 			scatter(sconns(:,2), sconns(:,1), 10, 'g', 's');
-			title(['Mean Distance, ', condName{comps(1,1)}, ' to ', condName{comps(1,2)}, ' EC'], 'FontSize',12);
+			title(['Mean Distance, ', labels{comps(1,1)}, ' to ', labels{comps(1,2)}, ' EC'], 'FontSize',12);
 			set(ax(1), {'YTick','YTickLabel'}, {1:N.ROI, labels_ROI});
             set(ax(1), {'XTick','XTickLabel','XTickLabelRotation'}, {5:5:N.ROI, labels_ROI(5:5:N.ROI), -90});
 			pbaspect([1 1 1]);
@@ -489,13 +513,13 @@ elseif ~isempty(thresh) && strcmpi(render, 'multiple')
 			% Render in SPM
 			map = nbs{ind(1),ind(2)}{f}.*mean(d, 3, 'omitnan')./10;
 			ax = subplot(2, 4, [3 4 7 8]); hold on
-			plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,i),2)), coords_ROI, origin, labels_ROI, sphereScale, [], map, cind, strcont, [], rdux);
-
+			plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, [], rdux);
+        
 			% Title figure
 			sgtitle(['Threshold ', num2str(tstat(ind(1))), ', ', strcont{ind(2)}]);
 
 			% Save as PNG file
-			% saveas(F(f), fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'), '')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')), '_N', num2str(f))), 'png');
+			saveas(F(f), fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'), '')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')), '_N', num2str(f))), 'png');
 			clear sconns
 		end
 
@@ -503,14 +527,14 @@ elseif ~isempty(thresh) && strcmpi(render, 'multiple')
 		imgs{ind(1), ind(2)} = F;
 
 		% Save F
-		% savefig(F, fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'),'')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')))));
-		% clear F
+		savefig(F, fullfile(path{5}, dirName, strcat(fileName(1:8), 'T', char(join(strsplit(num2str(tstat(ind(1))),'.'),'')), '_C', char(join(strsplit(num2str(contrast(ind(2),:))), '')))));
+		clear F
 	end
 	
 	% Save as MATLAB figure
-	% savefig(F, fullfile(path{5}, dirName, strcat(fN{1},"_NBS")), 'compact');
+	savefig(F, fullfile(path{5}, dirName, strcat(fN{1},"_NBS")), 'compact');
 end
-clear K k n f t scomb ind nsig s thresh cont m n bin x y F fN % ax
+clear K k n f t scomb ind nsig s thresh cont m n bin x y F fN i ax
 
 
 %% Save results
@@ -518,7 +542,7 @@ clear K k n f t scomb ind nsig s thresh cont m n bin x y F fN % ax
 % Save figure
 if exist('F', 'var')
 	fN = strsplit(fileName, '_');
-	% saveas(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'png');
-	% savefig(F, fullfile(path{5}, dirName, strjoin({fN{1:end-1},'NBS'},'_')), 'compact');
+	saveas(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'png');
+	savefig(F, fullfile(path{5}, dirName, strjoin({fN{1:end-1},'NBS'},'_')), 'compact');
 end
 clear c C F S
