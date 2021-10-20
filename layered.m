@@ -1,40 +1,50 @@
-%% Set paths
+% %% Set paths
+% 
+% % Find general path (enclosing folder of current directory)
+% path{1} = strsplit(pwd, '/');
+% path{3,1} = strjoin(path{1}(1:end-1),'/');
+% path{4,1} = strjoin(path{1}, '/');
+% path{1,1} = strjoin(path{1}(1:end-2),'/');
+% path{2,1} = fullfile(path{1},'MATLAB');
+% 
+% % Set required subdirectories
+% path{5,1} = fullfile(path{3},'UCLA','Results','EC');
+% path{6,1} = fullfile(path{3},'Atlases','AAL');
+% 
+% % Add relevant paths
+% addpath(genpath(fullfile(path{2}, 'BCT', 'NBS')));
+% addpath(fullfile(path{2},'spm12'));
+% addpath(genpath(fullfile(path{2}, 'mArrow3')));
+% addpath(genpath(fullfile(path{2}, 'permutationTest')));
+% addpath(genpath(fullfile(path{3}, 'Functions')));
+% addpath(genpath(fullfile(path{3}, 'LEICA', 'Functions')));
 
-% Find general path (enclosing folder of current directory)
-path{1} = strsplit(pwd, '/');
-path{3,1} = strjoin(path{1}(1:end-1),'/');
-path{4,1} = strjoin(path{1}, '/');
-path{1,1} = strjoin(path{1}(1:end-2),'/');
-path{2,1} = fullfile(path{1},'MATLAB');
 
-% Set required subdirectories
-path{5,1} = fullfile(path{3},'UCLA','Results','EC');
-path{6,1} = fullfile(path{3},'Atlases','AAL');
-
-% Add relevant paths
-addpath(genpath(fullfile(path{2}, 'BCT', 'NBS')));
-addpath(fullfile(path{2},'spm12'));
-addpath(genpath(fullfile(path{2}, 'mArrow3')));
-addpath(genpath(fullfile(path{2}, 'permutationTest')));
-addpath(genpath(fullfile(path{3}, 'Functions')));
-addpath(genpath(fullfile(path{3}, 'LEICA', 'Functions')));
-
+function [F] = layered(memberships, ttype, h, storarray, N, condName, contrast, cind, fDim, coords_ROI, origin, sphereScale, strcont, rdux)
 
 %% Visualization Settings
 
-% Define files to load
-fileName = 'LE_ICA_ControlIC*.mat';
-dirName = 'SubjectwithGroupPrior';
-fileName = dir(fullfile(path{5}, dirName, fileName));
-fileName = fileName.name;
-fN = strsplit(fileName, '_');
+% % Define files to load
+% fileName = 'LE_ICA_ControlIC*.mat';
+% dirName = 'SubjectwithGroupPrior';
+% fileName = dir(fullfile(path{5}, dirName, fileName));
+% fileName = fileName.name;
+% fN = strsplit(fileName, '_');
+% 
+% % set color index
+% cind.node = [1 0 0; 0 0 1];
+% cind.conn = [1 0 1; 0 1 1];
 
-% set color index
-cind.node = [1 0 0; 0 0 1];
-cind.conn = [1 0 1; 0 1 1];
+% % Set main figure dimensions & indices
+% fDim = [8 8];
+i = (fDim(1))*(0:fDim(2)-1);
+fInds{1} = sort([i+1 i+2]);
+fInds{2} = sort([i+3 i+4 i+5]);
+fInds{3} = fInds{2}+3;
+fInds{4} = sort((fDim(1)-1)*fDim(2):fDim(1)*fDim(2));
 
-% locate significant components
-i = h{strcmpi(spaces, space)}(ttype,:);
+% % locate significant components
+% h = h{strcmpi(spaces, space)}(ttype,:);
 
 
 %% Visualize each contrast separately
@@ -51,8 +61,8 @@ for c = 1:length(ind)
     % Generate node color map
     nCol = zeros(N.ROI, 3);
     cont = strjoin(condName(logical(contrast(ind(c),:))), " v. ");          % Generate contrast label
-    nCol(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))<0,:) = repmat(cind.node(1,:), sum(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))<0),1);
-    nCol(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))>0,:) = repmat(cind.node(2,:), sum(zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2))>0),1);
+    nCol(zscore(mean(memberships(:,cell2mat(h{ttype,cont})),2))<0,:) = repmat(cind.node(1,:), sum(zscore(mean(memberships(:,cell2mat(h{ttype,cont})),2))<0),1);
+    nCol(zscore(mean(memberships(:,cell2mat(h{ttype,cont})),2))>0,:) = repmat(cind.node(2,:), sum(zscore(mean(memberships(:,cell2mat(h{ttype,cont})),2))>0),1);
     
     % Isolate contrasts of interest
    	a = (sum(abs(contrast) == abs(contrast(ind(c),:)),2)) == N.conditions;
@@ -64,9 +74,10 @@ for c = 1:length(ind)
         %% Combined image
         % Open figure & set axes
         F(ind(c),t,1) = figure('Position', [0 0 1240 1024]);
-        ax(1,1) = subplot(6, 5, [1:2, 6:7, 11:12, 16:17, 21:22]); hold on;              % brain space network
-        ax(2,1) = subplot(6, 5, [3:5, 8:10, 13:15, 18:20, 23:25]); hold on; grid on;	% adjancecy matrix
-        ax(3,1) = subplot(6, 5, 26:30); hold on;                                        % membership bar chart
+        ax(1,1) = subplot(fDim(1), fDim(2), fInds{1}); hold on;				% brain space network
+        ax(2,1) = subplot(fDim(1), fDim(2), fInds{2}); hold on; grid on;	% adjancecy matrix
+        ax(3,1) = subplot(fDim(1), fDim(2), fInds{3}); hold on;				% graph format
+        ax(4,1) = subplot(fDim(1), fDim(2), fInds{4}); hold on;				% membership bar chart
 
         % Set up adjacency matrix chart
         set(ax(2,1), {'YLim','YTick','YTickLabel','FontSize'}, {[0.6 N.ROI+0.5], 1:N.ROI, labels_ROI, 5});
@@ -105,28 +116,61 @@ for c = 1:length(ind)
                 nm{c,t}(unique(y),m) = nm{t}(unique(y),m)+ones(length(unique(y)), 1);
             end
         end
-
+        
+        
+        % Generate directed graphs for all components
+        G = cell(1, size(map,2));
+        for c2 = 1:size(map,2)
+            G{c2} = [];
+            for f = 1:numel(map{:,c2})
+                G{c2} = G{c2} + map{c2}{f};
+            end
+            G{c2} = digraph(G{c2}, labels_ROI);
+            plot(ax(3,1), G{c2}, 'Layout','force', 'UseGravity',true, 'EdgeColor',cind.conn(c2,:), 'NodeColor',nCol); hold on
+        end
+        legend(strcat("Contrast: ", strcont(a)));
+        
+        
         % Plot node roles
-        b = bar(ax(3,1), 1:N.ROI, nm{t}');              % connection type
+        b = bar(ax(4,1), 1:N.ROI, nm{t}');              % connection type
         s2 = scatter(ax(3,1), 1:N.ROI, zeros(1,N.ROI), 'filled');	% node type
         for c2 = 1:nnz(a)
             b(c2).FaceColor = cind.conn(c2,:);
         end
         s2.CData = nCol; clear c2 s2
-
+        
         % Render overall network in SPM
         axes(ax(1,1));
-        plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,cell2mat(i{ttype,cont})),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, [], rdux);
+        plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,cell2mat(h{ttype,cont})),2)), coords_ROI, origin, sphereScale, [], map, cind, strcont, [], rdux);
         sgtitle(F(ind(c),t,1), ['Threshold: t-statistic = ', num2str(tstat(thresh(t)))]);
         title(ax(1,1), "All Components", 'FontSize',12);
-
+        
         % Plot legend in connectivity matrix
         legend(ax(2,1), s, strcont(a), 'Location','southoutside', 'Color','w', 'FontSize',10);   %  'Orientation','horizontal',
         clear s lgnd s2
         
-        %% Individual components
+        
+        %% Individual components in SPM format
         F(ind(c),t,2) = figure('Position', [0 0 1280 1024]);
         T = tiledlayout(F(ind(c),t,2), 'flow');
+
+        % Render individual components
+        for c2 = 1:size(map,2)
+            for f = 1:numel(map{:,c2})
+                % Plot directed graphs per component
+                ax(f,2) = nexttile(T); hold on
+                
+                % Plot directed graphs per component
+                plot_nodes_in_cortex(cortex, zscore(mean(memberships(:,cell2mat(h{ttype,cont})),2)), coords_ROI, origin, sphereScale, [], map{c2}{f}, cind, strcont, [], rdux);
+                title(strcat("Contrast: ", strcont{c2}), 'FontSize',12);
+                subtitle(strcat("Component ", num2str(f)), 'FontSize',8);
+            end
+        end
+        
+        
+        %% Individual components in graph format
+        F(ind(c),t,3) = figure('Position', [0 0 1280 1024]);
+        T = tiledlayout(F(ind(c),t,3), 'flow');
 
         % Render individual components
         for c2 = 1:size(map,2)
@@ -139,21 +183,24 @@ for c = 1:length(ind)
                 S = subgraph(G, labels_ROI(union(r,cl)));
 
                 % Plot directed graphs per component
-                ax(f,2) = nexttile(T); hold on
+                ax(f,3) = nexttile(T); hold on
                 plot(S, 'Layout','force', 'UseGravity',true, 'EdgeColor',cind.conn(c2,:), 'NodeColor',nCol(union(r,cl),:));
                 title(strcat("Contrast: ", strcont{c2}), 'FontSize',12);
-%                 subtitle(strcat("Component ", num2str(f)), 'FontSize',8);
+                subtitle(strcat("Component ", num2str(f)), 'FontSize',8);
             end
         end
     end
 end
-clear c f colind m n map a col climits ncomp T s r cl G S c2 t a
+clear c f colind m n map a col climits ncomp T s r cl G S c2 t a fDim fInds
 
 
-%% Save figures
+% %% Save figures
 % for t = 1:max(unique((ind)))
 % 	saveas(F(t,1), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')), "_all")), 'png');
 %     saveas(F(t,2), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')), "_individual")), 'png');
 % end
 % % Save as MATLAB figure
 % savefig(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'compact');
+
+
+end
