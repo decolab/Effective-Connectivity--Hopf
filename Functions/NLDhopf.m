@@ -3,7 +3,7 @@ function fval = NLDhopf(x)
 
 
 %% Load parameters
-global activation entro dsig bfilt afilt C W N T omega co a aType cfType;
+global activation ent dsig bfilt afilt C W N T omega co a aType cfType;
 
 
 %% Setup
@@ -20,11 +20,6 @@ for i = 1:N.ROI
 	end
 end
 clear i j nvars
-
-% If generating random initial connectivity matrix
-% wC = reshape(x, [N.ROI, N.ROI]);	% if not fitting bifurcation parameters
-% a = repmat(x(1:N.ROI)', [1,2]);	% if fitting bifurcation parameters
-% wC = reshape(x(N.ROI+1:end), [N.ROI, N.ROI]);	% if fitting bifurcation parameters
 
 
 %% Run nonlinear Hopf model
@@ -57,22 +52,19 @@ switch cfType
 		for ass = 1:N.comp
 			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
 		end
-		fval = sum([entro entroSim], 1, 'omitnan');
+		fval = sum([ent entroSim], 1, 'omitnan');
 		fval = abs(fval(1) - fval(2));
 	case 'eucEntro'			% Use Euclidean distance between total entropies as cost function
 		entroSim = nan(N.comp, 1);
 		for ass = 1:N.comp
 			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
 		end
-		entroSim = horzcat(entro, entroSim)';
+		entroSim = horzcat(ent, entroSim)';
 		fval = pdist(entroSim);
 	case 'ksEntro'			% Use KS distance between entropy distributions as cost function
 		entroSim = nan(N.comp, 1);
 		for ass = 1:N.comp
 			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
 		end
-		[~, ~, fval] = kstest2(entro, entroSim);
+		[~, ~, fval] = kstest2(ent, entroSim);
 end
-
-% Display cost function
-% display(['Current KS Distance: ', num2str(fval)]);

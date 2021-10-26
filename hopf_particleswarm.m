@@ -19,7 +19,7 @@
 clear; close all; clc;
 
 % Set global variables
-global activation entro dsig bfilt afilt C a W N T omega G co aType cfType;
+global activation ent dsig bfilt afilt a W N T omega G co aType cfType C;
 
 
 %% Set paths & directories
@@ -29,43 +29,51 @@ global activation entro dsig bfilt afilt C a W N T omega G co aType cfType;
 rng('shuffle');
 
 % Find general path (enclosing folder of current directory)
-path{1} = strsplit(pwd, '/');
-path{3,1} = strjoin(path{1}(1:end-1),'/');
-path{4,1} = strjoin(path{1}, '/');
+path{1} = strsplit(pwd, "/");
+path{3,1} = strjoin(path{1}(1:end-1),"/");
+path{4,1} = strjoin(path{1},"/");
 path{1,1} = strjoin(path{1}(1:end-2),'/');
 path{2,1} = fullfile(path{1},'MATLAB');
-
-% Set required subdirectories
-path{5,1} = fullfile(path{3},'UCLA','Data');
-path{6,1} = fullfile(path{3},'UCLA','Results','LEICA','CommonIC');
-path{7,1} = fullfile(path{3},'UCLA','Results','EC');
 
 % Add relevant paths
 fpath{1,1} = fullfile(path{3},'Functions');
 fpath{2,1} = fullfile(path{3},'LEICA','Functions');
-fpath{3,1} = fullfile(path{4},'Functions');
-for k = 1:numel(fpath)
+fpath{3,1} = fullfile(path{3},'EC','Functions');
+fpath{4,1} = fullfile(path{4},'Functions');
+fpath{5,1} = fullfile(path{2},'permutationTest');
+fpath{6,1} = fullfile(path{2},'BCT');
+fpath{7,1} = fullfile(path{2},'mArrow3');
+fpath{8,1} = fullfile(path{2},'spm12');
+for k = 1:numel(fpath)-1
 	addpath(genpath(fpath{k}));
 end
+addpath(fpath{numel(fpath)});
 clear fpath k
+
+% Set required subdirectories
+path{5,1} = fullfile(path{3},'UCLA','Data');
+path{6,1} = fullfile(path{3},'UCLA','Results','LEICA');
+path{7,1} = fullfile(path{3},'UCLA','Results','EC');
 
 
 %% Set file names & load data
 
 % Define file to analyze
-fileName = 'LE_ICA_CommonIC_COS_ALL_wideband_k1_Iteration2';
+fileName = 'GMR/Control_ICs/LE_COS_ICA_All_wideband_k1_Iteration1';
 
-% Set EC type to compute
-space = 'IC';			% 'ROI' to fit by region, 'ICA' to fit by assembly
+% Set comparisons for visualizations
+ttypes = ["kstest2", "permutation"];
+spaces = ["dFC", "IC"];     
+ttype = "kstest2";          % test on which to base visualization
+space = "IC";               % space in which to base visualization: 'ROI' to fit by region, 'ICA' to fit by assembly
 typeoffit = 'Subject with Group Prior';
 mecDist = 'seuclidean';
 cfType = 'eucEntro';
 
 % Load data
-load(fullfile(path{6}, fileName), 'labels_ROI','coords_ROI', 'activities', 'entro','memberships','I','co','W','T','N','C', 'labels','dFC', 'aType');
-sEntro = entro; clear entro
-comps = C; clear C
+load(fullfile(path{6}, fileName), 'cortex','labels_ROI','coords_ROI','origin','sphereScale','rdux', 'activities', 'entro','memberships','I','h', 'co','W','T','N','comps','labels','dFC', 'aType');
 N.comp = N.IC; N = rmfield(N, 'IC');
+cortex.file = fullfile(path{3},'Atlases','AAL',cortex.file);
 
 % Reset N.fig
 N.fig = 1;
@@ -76,7 +84,7 @@ nIter = numel(fList);										% Find number of previous iterations
 if nIter == 0
 	nIter = 1;
 end
-fileName = strcat(fileName, '_EC_', cfType, '_Iteration', num2str(nIter));
+fileName = fullfile(erase(typeoffit,' '), strcat(fileName, '_EC_', cfType, '_Iteration', num2str(nIter)));
 clear nIter fList
 
 
@@ -86,8 +94,8 @@ clear nIter fList
 G = 0.2;				% global coupling weight
 
 % Set structural connectivity
-C = load(fullfile(path{5}, 'formattedUCLA.mat'));  % load(fullfile(path{3}, 'Atlases', 'AAL', 'sc90.mat'));
-C = C.ADJ_average;
+d = load(fullfile(path{5}, 'formattedUCLA.mat'));
+C = d.ADJ_average; clear d      % Define file to analyze
 Cnorm = C/max(C,[],'all','omitnan')*G;
 
 
@@ -112,11 +120,11 @@ a = -0.0*ones(N.ROI, 2);
 params.filt.bfilt = bfilt;
 params.filt.afilt = afilt;
 
-
-%% Compute effective connectivity
-
 % Set design matrix
 I = I{:,:};
+
+
+%% Compute effective connectivity
 
 % Find number of nonzero connections, approximate structural connectivity
 % per condition
@@ -157,7 +165,7 @@ switch typeoffit
 				omega = findomega_subj(dFC.subj{s,c}, N.ROI, T, afilt, bfilt);
 
 				% Set activation
-				entro = squeeze(sEntro.IC(:,s,c));
+				ent = squeeze(entro.IC(:,s,c));
 				activation = squeeze(activities.subj{s,c});
 
 				% Optimize connectivity for each condition
@@ -187,7 +195,7 @@ switch typeoffit
 		for c = 1:N.conditions
 			
 			% Extract relevant entropy, activations
-			entro = sEntro.mIC{:,condName{c}};
+			ent = entro.mIC{:,condName{c}};
 			activation = squeeze(activities.cond{c});
 			
 			% Display current status
@@ -227,7 +235,7 @@ switch typeoffit
 		for c = 1:N.conditions
 			
 			% Extract relevant entropy, activations
-			entro = sEntro.mIC{:,condName{c}};
+			ent = entro.mIC{:,condName{c}};
 			
 			% Display current status
 			disp(['Computing prior for condition ', num2str(c),  '.']);
@@ -241,7 +249,7 @@ switch typeoffit
 			
 			% Set activation, entropy
 			activation = squeeze(activities.cond{c});
-			entro = squeeze(sEntro.mIC{:,condName{c}});
+			ent = squeeze(entro.mIC{:,condName{c}});
 
 			% Optimize connectivity for each condition
 			[x, fval(c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
@@ -277,7 +285,7 @@ switch typeoffit
 
 				% Set activation
 				activation = squeeze(activities.subj{s,c});
-				entro = squeeze(sEntro.IC(:,s,c));
+				ent = squeeze(entro.IC(:,s,c));
 
 				% Optimize connectivity for each condition
 				[x, fval(s,c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
@@ -293,14 +301,14 @@ switch typeoffit
 						end
 					end
 				end
-            end
+			end
             EC(:,:,c,N.subjects(c)+1:max(N.subjects)) = nan(N.ROI, N.ROI, max(N.subjects)-N.subjects(c));
 		end
 end
 clear x i j s c a ng nn omega entro lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90
 
 % Save results
-save(fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName));
+save(fullfile(path{7}, fileName));
 
 
 %% Display EC of controls, OCD
@@ -423,9 +431,83 @@ switch typeoffit
 end
 clear k s d c m
 
+
+%% Strength Analysis
+
+% set color index
+cind.node = [1 0 0; 0 0 1];
+cind.conn = [1 0 1; 0 1 1];
+
+% Set strength index
+index = ["In", "Out"];
+
+% Run strength analysis
+[strength, vn] = netStrength(EC, I, comps, labels, labels_ROI, index, N);
+
+% Visualize strength results
+S = netStrengthVis(strength, comps, labels, I, labels_ROI, index, N, cind, vn);
+clear vn
+
+% Save strength results
+save(fullfile(path{7}, fileName), 'strength', '-append');
+
+
+%% NBS analysis
+
+% Analysis Settings
+intercept = false;	% determines whether to use intercept term in NBS
+
+% Check if need intercept term
+if intercept == true
+	I = horzcat(ones(size(I,1),1), I);
+end
+
+% Set arrays for parameter sweeps
+tstat = 4:0.5:6;
+
+% Allocate contrast matrices
+cont = zeros((size(comps,1)+size(I,2))*2, size(I,2));
+strcont = cell((size(comps,1)+size(I,2))*2, 1);
+
+% Set all-way contrasts
+c = 2*(size(comps,1)+1:size(comps,1)+N.conditions);
+cont(c-1, :) = -ones(size(I,2), size(I,2)) + diag(2*ones(N.conditions,1));
+cont(c, :) = ones(size(I,2), size(I,2)) - diag(2*ones(N.conditions,1));
+for c = 2*(size(comps,1)+1:size(comps,1)+N.conditions)
+    strcont{c-1} = strjoin([labels((c-2*size(comps,1))/2), '> ALL']);
+    strcont{c} = strjoin([labels((c-2*size(comps,1))/2), '< ALL']);
+end
+
+% Set pairwise contrasts
+for c = 2*(1:size(comps,1))
+    cont(c-1, comps(c/2,:)) = [1 -1];
+    cont(c, comps(c/2,:)) = [-1 1];
+    strcont{c-1} = strjoin([labels(comps(c/2,1)), '>', labels(comps(c/2,2))]);
+    strcont{c} = strjoin([labels(comps(c/2,1)), '<', labels(comps(c/2,2))]);
+end
+
+% Run NBS analysis
+[nbs, STATS, GLM, storarray] = runNBS(EC, cont, I, N, tstat);
+NBS = layered(cortex, nbs, memberships, ttype, h{strcmpi(spaces, space)}(ttype,:), storarray, N, labels, cont, cind, [8 8], coords_ROI, labels_ROI, origin, sphereScale, strcont, rdux);
+
+
+%% Save results
+
+% Add strength figures to F
+for s = 1:numel(S)
+	F(numel(F)+1) = S(s);
+end
+clear s S
+
+% Add NBS figures to F
+for n = 1:numel(NBS)
+	F(numel(F)+1) = NBS(n);
+end
+clear n NBS
+
 % Save figure
 savefig(F, fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'compact');
 clear F
 
 % Save results
-save(fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'mEC','sEC', '-append');
+save(fullfile(path{7}, fileName), 'h','mEC','sEC','nbs','strength', '-append');

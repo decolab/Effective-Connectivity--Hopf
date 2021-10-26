@@ -1,50 +1,14 @@
-% %% Set paths
-% 
-% % Find general path (enclosing folder of current directory)
-% path{1} = strsplit(pwd, '/');
-% path{3,1} = strjoin(path{1}(1:end-1),'/');
-% path{4,1} = strjoin(path{1}, '/');
-% path{1,1} = strjoin(path{1}(1:end-2),'/');
-% path{2,1} = fullfile(path{1},'MATLAB');
-% 
-% % Set required subdirectories
-% path{5,1} = fullfile(path{3},'UCLA','Results','EC');
-% path{6,1} = fullfile(path{3},'Atlases','AAL');
-% 
-% % Add relevant paths
-% addpath(genpath(fullfile(path{2}, 'BCT', 'NBS')));
-% addpath(fullfile(path{2},'spm12'));
-% addpath(genpath(fullfile(path{2}, 'mArrow3')));
-% addpath(genpath(fullfile(path{2}, 'permutationTest')));
-% addpath(genpath(fullfile(path{3}, 'Functions')));
-% addpath(genpath(fullfile(path{3}, 'LEICA', 'Functions')));
-
-
-function [F] = layered(memberships, ttype, h, storarray, N, condName, contrast, cind, fDim, coords_ROI, origin, sphereScale, strcont, rdux)
+function [F] = layered(cortex, nbs, memberships, ttype, h, storarray, N, condName, contrast, cind, fDim, coords_ROI, labels_ROI, origin, sphereScale, strcont, rdux)
 
 %% Visualization Settings
 
-% % Define files to load
-% fileName = 'LE_ICA_ControlIC*.mat';
-% dirName = 'SubjectwithGroupPrior';
-% fileName = dir(fullfile(path{5}, dirName, fileName));
-% fileName = fileName.name;
-% fN = strsplit(fileName, '_');
-% 
-% % set color index
-% cind.node = [1 0 0; 0 0 1];
-% cind.conn = [1 0 1; 0 1 1];
-
-% % Set main figure dimensions & indices
-% fDim = [8 8];
-i = (fDim(1))*(0:fDim(2)-1);
+% Set main figure dimensions & indices
+i = (fDim(2))*(0:fDim(1)-2);
 fInds{1} = sort([i+1 i+2]);
 fInds{2} = sort([i+3 i+4 i+5]);
 fInds{3} = fInds{2}+3;
-fInds{4} = sort((fDim(1)-1)*fDim(2):fDim(1)*fDim(2));
-
-% % locate significant components
-% h = h{strcmpi(spaces, space)}(ttype,:);
+fInds{4} = fDim(1)*(fDim(2)-1:fDim(2));
+fInds{4}(1) = fInds{4}(1)+1;
 
 
 %% Visualize each contrast separately
@@ -121,7 +85,7 @@ for c = 1:length(ind)
         % Generate directed graphs for all components
         G = cell(1, size(map,2));
         for c2 = 1:size(map,2)
-            G{c2} = [];
+            G{c2} = sparse(zeros(N.ROI));
             for f = 1:numel(map{:,c2})
                 G{c2} = G{c2} + map{c2}{f};
             end
@@ -131,13 +95,13 @@ for c = 1:length(ind)
         legend(strcat("Contrast: ", strcont(a)));
         
         
-        % Plot node roles
-        b = bar(ax(4,1), 1:N.ROI, nm{t}');              % connection type
-        s2 = scatter(ax(3,1), 1:N.ROI, zeros(1,N.ROI), 'filled');	% node type
-        for c2 = 1:nnz(a)
-            b(c2).FaceColor = cind.conn(c2,:);
-        end
-        s2.CData = nCol; clear c2 s2
+%         % Plot node roles
+%         b = bar(ax(4,1), 1:N.ROI, nm{t}');              % connection type
+%         s2 = scatter(ax(3,1), 1:N.ROI, zeros(1,N.ROI), 'filled');	% node type
+%         for c2 = 1:nnz(a)
+%             b(c2).FaceColor = cind.conn(c2,:);
+%         end
+%         s2.CData = nCol; clear c2 s2
         
         % Render overall network in SPM
         axes(ax(1,1));
@@ -192,15 +156,6 @@ for c = 1:length(ind)
     end
 end
 clear c f colind m n map a col climits ncomp T s r cl G S c2 t a fDim fInds
-
-
-% %% Save figures
-% for t = 1:max(unique((ind)))
-% 	saveas(F(t,1), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')), "_all")), 'png');
-%     saveas(F(t,2), fullfile(path{5}, dirName, strcat(fN{1},"_NBS_Threshold", string(join(strsplit(num2str(tstat(t)),'.'),'')), "_individual")), 'png');
-% end
-% % Save as MATLAB figure
-% savefig(F, fullfile(path{5}, dirName, strjoin({fN{1},'NBS'},'_')), 'compact');
 
 
 end
