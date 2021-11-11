@@ -35,7 +35,6 @@ end
 clear c ind n i CD
 
 % Set storage arrays
-storarray = nan(length(tstat), size(contrast,1));
 nbs = cell(length(tstat), size(contrast,1));
 
 
@@ -56,10 +55,9 @@ for c = 1:size(contrast,1)
 	for t = 1:length(tstat)
 		STATS.thresh = tstat(t);		% threshold test statistic
 		nbs{t, c} = NBSdirected(EC, GLM, STATS);	% Run NBS
-		
-		storarray(t, c) = ~isempty(nbs{t,c});
 	end
 end
+storarray = ~cellfun(@isempty, nbs);
 clear t c
 
 end

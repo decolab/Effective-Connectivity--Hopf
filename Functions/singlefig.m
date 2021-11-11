@@ -1,4 +1,4 @@
-function [F] = layered(cortex, nbs, memberships, tstat, ttype, h, ind, N, contrast, cind, fDim, fInds, coords_ROI, labels_ROI, origin, sphereScale, strcont, rdux)
+function [F] = singlefig(cortex, nbs, memberships, tstat, ttype, h, ind, N, contrast, cind, fDim, fInds, coords_ROI, labels_ROI, origin, sphereScale, strcont, rdux)
 
 
 %% Visualize each contrast separately

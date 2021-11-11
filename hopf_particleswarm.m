@@ -448,6 +448,12 @@ index = ["In", "Out"];
 S = netStrengthVis(strength, comps, labels, I, labels_ROI, index, N, cind, vn);
 clear vn
 
+% Add strength figures to F
+for s = 1:numel(S)
+	F(numel(F)+1) = S(s);
+end
+clear s S
+
 % Save strength results
 save(fullfile(path{7}, fileName), 'strength', '-append');
 
@@ -486,28 +492,43 @@ for c = 2*(1:size(comps,1))
     strcont{c} = strjoin([labels(comps(c/2,1)), '<', labels(comps(c/2,2))]);
 end
 
+% Set subplot dimensions
+fInds{1} = [2 4];
+fInds{2} = 1;
+fInds{3} = 3;
+
 % Run NBS analysis
 [nbs, STATS, GLM, storarray] = runNBS(EC, cont, I, N, tstat);
-NBS = layered(cortex, nbs, memberships, ttype, h{strcmpi(spaces, space)}(ttype,:), storarray, N, labels, cont, cind, [8 8], coords_ROI, labels_ROI, origin, sphereScale, strcont, rdux);
+
+% Find results with paired contrasts
+pair = findseq(storarray, 2);
+
+% Find results with single contrasts
+sing = findseq(storarray, 1);
+sing(ismember(sing, pair, 'rows'),:) = [];
+
+% Visualize paired NBS results
+NBS{1} = layered(cortex, nbs(:,unique(pair(:,2))), memberships, tstat, ttype, h{strcmpi(spaces, space)}(ttype,:), pair(mod(pair(:,2),2)==1,:), N, cont(unique(pair(:,2)),:), cind, [2 2], fInds, coords_ROI, labels_ROI, origin, sphereScale, strcont, rdux);
+NBS{1} = NBS{1}(isgraphics(NBS{1}));
+
+% Visualize unpaired NBS results
+NBS{2} = singlefig(cortex, nbs, memberships, tstat, ttype, h{strcmpi(spaces, space)}(ttype,:), sing, N, cont, cind, [2 2], fInds, coords_ROI, labels_ROI, origin, sphereScale, strcont, rdux);
+NBS{2} = NBS{2}(isgraphics(NBS{2}));
+
+% Add NBS figures to F
+for s = 1:numel(NBS)
+    for n = 1:numel(NBS)
+        F(numel(F)+1) = NBS{s}(n);
+    end
+end
+clear n s NBS c
 
 
 %% Save results
-
-% Add strength figures to F
-for s = 1:numel(S)
-	F(numel(F)+1) = S(s);
-end
-clear s S
-
-% Add NBS figures to F
-for n = 1:numel(NBS)
-	F(numel(F)+1) = NBS(n);
-end
-clear n NBS
 
 % Save figure
 savefig(F, fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'compact');
 clear F
 
 % Save results
-save(fullfile(path{7}, fileName), 'h','mEC','sEC','nbs','strength', '-append');
+save(fullfile(path{7}, fileName), 'h','mEC','sEC','nbs','strength','storarray', '-append');
