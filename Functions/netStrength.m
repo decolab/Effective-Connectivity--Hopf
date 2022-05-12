@@ -32,15 +32,13 @@ end
 clear f B S p_dum
 
 % Convert comparisons to table
-if size(comps,1) > 1
-    for i = 1:numel(index)
-        strength.(index(i)).p = array2table(strength.(index(i)).p, 'RowNames',labels_ROI, 'VariableNames',vn);						% p-value
-        strength.(index(i)).h = array2table(strength.(index(i)).h, 'RowNames',labels_ROI, 'VariableNames',vn);						% uncorrected hypothesis test
-        strength.(index(i)).tstat = array2table(strength.(index(i)).tstat, 'RowNames',labels_ROI, 'VariableNames',vn);				% test statistic (t-statistic or Hodges' G)
-        strength.(index(i)).FDR = array2table(strength.(index(i)).FDR, 'RowNames',labels_ROI, 'VariableNames',vn);					% False-Discovery Rate
-        strength.(index(i)).Bonferroni = array2table(strength.(index(i)).Bonferroni, 'RowNames',labels_ROI, 'VariableNames',vn);	% Bonferroni threshold
-        strength.(index(i)).Sidak = array2table(strength.(index(i)).Sidak, 'RowNames',labels_ROI, 'VariableNames',vn);				% Sidak threshold
-    end
+for i = 1:numel(index)
+    strength.(index(i)).p = array2table(strength.(index(i)).p, 'RowNames',labels_ROI, 'VariableNames',vn);						% p-value
+    strength.(index(i)).h = array2table(strength.(index(i)).h, 'RowNames',labels_ROI, 'VariableNames',vn);						% uncorrected hypothesis test
+    strength.(index(i)).tstat = array2table(strength.(index(i)).tstat, 'RowNames',labels_ROI, 'VariableNames',vn);				% test statistic (t-statistic or Hodges' G)
+    strength.(index(i)).FDR = array2table(strength.(index(i)).FDR, 'RowNames',labels_ROI, 'VariableNames',vn);					% False-Discovery Rate
+    strength.(index(i)).Bonferroni = array2table(strength.(index(i)).Bonferroni, 'RowNames',labels_ROI, 'VariableNames',vn);	% Bonferroni threshold
+    strength.(index(i)).Sidak = array2table(strength.(index(i)).Sidak, 'RowNames',labels_ROI, 'VariableNames',vn);				% Sidak threshold
 end
 
 end

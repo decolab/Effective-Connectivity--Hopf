@@ -66,6 +66,8 @@ for c = 1:size(comps,1)
 %             legend(labels(comps(c,:)));
 %             title(['Modeled ', FDR.Properties.VariableNames{col(n)}, '-Strength of ', labels_ROI{r(n)}]);
 %         end
+    else
+        S = [];
     end
 end
 clear n ax r c lbl f cg instr outstr i c2 col t index vn

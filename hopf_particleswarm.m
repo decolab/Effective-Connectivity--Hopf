@@ -4,7 +4,7 @@
 % connectivity model is based on the Hopf oscillator.  The particle
 % swarm method seeks the connectivity strengths which produce the best
 % match between simulated data based on effective connectivity and the
-% empirical data.  This optimization method is run on each subject
+% empirical data.  This opt+imization method is run on each subject
 % sequentially, resulting in subject-specific connectivity maps.
 % 
 % This script may be broken into two distinct sections:
@@ -38,12 +38,11 @@ path{2,1} = fullfile(path{1},'MATLAB');
 % Add relevant paths
 fpath{1,1} = fullfile(path{3},'Functions');
 fpath{2,1} = fullfile(path{3},'LEICA','Functions');
-fpath{3,1} = fullfile(path{3},'EC','Functions');
-fpath{4,1} = fullfile(path{4},'Functions');
-fpath{5,1} = fullfile(path{2},'permutationTest');
-fpath{6,1} = fullfile(path{2},'BCT');
-fpath{7,1} = fullfile(path{2},'mArrow3');
-fpath{8,1} = fullfile(path{2},'spm12');
+fpath{3,1} = fullfile(path{4});
+fpath{4,1} = fullfile(path{2},'permutationTest');
+fpath{5,1} = fullfile(path{2},'BCT');
+fpath{6,1} = fullfile(path{2},'mArrow3');
+fpath{7,1} = fullfile(path{2},'spm12');
 for k = 1:numel(fpath)-1
 	addpath(genpath(fpath{k}));
 end
@@ -59,32 +58,37 @@ path{7,1} = fullfile(path{3},'UCLA','Results','EC');
 %% Set file names & load data
 
 % Define file to analyze
-fileName = 'GMR/Control_ICs/LE_COS_ICA_All_wideband_k1_Iteration1';
+fileName = 'GMR/Control_ICs/LE_COS_ICA_All_wideband_k1_Iteration2';
+% fileName = 'Common_ICs/LE_COS_ICA_importIC_ControlvOCD_wideband_k1_Iteration1';
 
 % Set comparisons for visualizations
-ttypes = ["kstest2", "permutation"];
-spaces = ["dFC", "IC"];     
-ttype = "kstest2";          % test on which to base visualization
+spaces = "IC";     
+ttype = "permutation";      % test on which to base visualization
 space = "IC";               % space in which to base visualization: 'ROI' to fit by region, 'ICA' to fit by assembly
 typeoffit = 'Subject with Group Prior';
 mecDist = 'seuclidean';
-cfType = 'eucEntro';
+cfType = 'eucEntro';	% 'maxEntro';
 
 % Load data
-load(fullfile(path{6}, fileName), 'cortex','labels_ROI','coords_ROI','origin','sphereScale','rdux', 'activities', 'entro','memberships','I','h', 'co','W','T','N','comps','labels','dFC', 'aType');
-N.comp = N.IC; N = rmfield(N, 'IC');
-cortex.file = fullfile(path{3},'Atlases','AAL',cortex.file);
+load(fullfile(path{6}, fileName), 'ROI', 'BOLD', 'cortex','origin', 'activities', 'entro','memberships','I','h', 'co','W','T','N','comps','groups','dFC', 'aType', 'SC');
+
+% Set cortex structure
+cortex.file = strsplit(cortex.file, filesep);
+cortex.file = char(fullfile(path{3},'Atlases','AAL',cortex.file(end)));
+if ~isfield(cortex, 'scale') && exist('sphereScale', 'var')
+    cortex.scale = sphereScale; clear sphereScale
+end
+if ~isfield(cortex, 'redux') && exist('rdux', 'var')
+    cortex.redux = rdux; clear rdux
+end
 
 % Reset N.fig
 N.fig = 1;
 
 % File to save
-fList = dir(fullfile(path{7}, strcat(fileName, '_*')));		% Get file list
+fList = dir(fullfile(path{7}, erase(typeoffit,' '), strcat(fileName, '_EC_', cfType, '_*.mat')));		% Get file list
 nIter = numel(fList);										% Find number of previous iterations
-if nIter == 0
-	nIter = 1;
-end
-fileName = fullfile(erase(typeoffit,' '), strcat(fileName, '_EC_', cfType, '_Iteration', num2str(nIter)));
+fileName = fullfile(erase(typeoffit,' '), strcat(fileName, '_EC_', cfType, '_Iteration', num2str(nIter+1)));
 clear nIter fList
 
 
@@ -94,16 +98,19 @@ clear nIter fList
 G = 0.2;				% global coupling weight
 
 % Set structural connectivity
-d = load(fullfile(path{5}, 'formattedUCLA.mat'));
-C = d.ADJ_average; clear d      % Define file to analyze
-Cnorm = C/max(C,[],'all','omitnan')*G;
+C = SC;
+C = C/max(C,[],'all','omitnan')*G;
 
 
 %% Set parameters
 
+% set color index
+cind.node = [1 0 0; 0 0 1];
+cind.conn = [1 0 1; 0 1 0];
+
 % Set condition names
-if ~exist('condName', 'var')
-	condName = I.Properties.VariableNames;
+if ~exist('groups', 'var')
+	groups = I.Properties.VariableNames;
 end
 
 % Temporal parameters
@@ -133,7 +140,7 @@ for i = 1:N.ROI
 	for j=1:N.ROI
 		if (C(i,j)>0 || j == N.ROI-i+1)
 			nvars = nvars+1;
-			xinit(1,nvars) = Cnorm(i, j);
+			xinit(1,nvars) = C(i, j);
 		end
 	end
 end
@@ -195,7 +202,7 @@ switch typeoffit
 		for c = 1:N.conditions
 			
 			% Extract relevant entropy, activations
-			ent = entro.mIC{:,condName{c}};
+			ent = entro.mIC{:,groups{c}};
 			activation = squeeze(activities.cond{c});
 			
 			% Display current status
@@ -234,9 +241,6 @@ switch typeoffit
 		% Compute priors
 		for c = 1:N.conditions
 			
-			% Extract relevant entropy, activations
-			ent = entro.mIC{:,condName{c}};
-			
 			% Display current status
 			disp(['Computing prior for condition ', num2str(c),  '.']);
 			
@@ -249,7 +253,7 @@ switch typeoffit
 			
 			% Set activation, entropy
 			activation = squeeze(activities.cond{c});
-			ent = squeeze(entro.mIC{:,condName{c}});
+			ent = squeeze(entro.mIC{:,groups{c}});
 
 			% Optimize connectivity for each condition
 			[x, fval(c)] = particleswarm(@NLDhopf, nvars, lb, ub, options);
@@ -305,10 +309,15 @@ switch typeoffit
             EC(:,:,c,N.subjects(c)+1:max(N.subjects)) = nan(N.ROI, N.ROI, max(N.subjects)-N.subjects(c));
 		end
 end
-clear x i j s c a ng nn omega entro lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn T activation Cnorm timeseries sc90
+clear x i j s c a ng nn omega ent lb ub initpop options nvars xinit afilt bfilt Isubdiag sig dsig conn activation Cnorm timeseries sc90
 
 % Save results
 save(fullfile(path{7}, fileName));
+
+% Display goodness-of-fit metrics
+fDims = [0 0 32.46 22.7]; fUnits = 'centimeters';
+[F] = Fig5(BOLD, entro, C, EC, N, T, dFC, groups, aType, W, co, fDims, fUnits);
+savefig(F, fullfile(path{7}, fileName), 'compact');
 
 
 %% Display EC of controls, OCD
@@ -321,7 +330,7 @@ switch typeoffit
 		sEC = nan(N.ROI, N.ROI, N.conditions);
 		
 		% Display mean EC for each condition
-		F(1) = figure;
+		F(numel(F)+1) = figure;
 		for c = 1:N.conditions
 			
 			% Compute mean, standard deviation of EC per group
@@ -332,22 +341,22 @@ switch typeoffit
 			subplot(2, N.conditions, 2*c-1); colormap jet
 			imagesc(mEC(:,:,c)); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title(['Mean of ', condName{c}]);
-			yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
+			title(['Mean of ', groups{c}]);
+			yticks(1:N.ROI); yticklabels(ROI{:,'Label'}); xticks([]);
 			pbaspect([1 1 1]);
 
 			% Plot standard deviation EC of each condition
 			subplot(2, N.conditions, 2*c); colormap jet
 			imagesc(sEC(:,:,c)); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title(['Standard Deviation of ', condName{c}]);
+			title(['Standard Deviation of ', groups{c}]);
 			yticks([]); xticks([]); pbaspect([1 1 1]);
 		end
 		sgtitle('Effective Connectivity');
 		clear c
 
 		% Display distance between mean ECs
-		F(2) = figure;
+		F(numel(F)+1) = figure;
 		for c = 1:size(comps, 1)
 			k(1) = comps(c,1); k(2) = comps(c,2);
 			
@@ -355,22 +364,22 @@ switch typeoffit
 			subplot(size(comps,1), 2, c); colormap jet
 			imagesc(pdist2(squeeze(mEC(:,:,k(1))), squeeze(mEC(:,:,k(2))), mecDist)); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title(['Mean: ', condName{k(1)}, ' vs. ' condName{k(2)}]);
-			yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
+			title(['Mean: ', groups{k(1)}, ' vs. ' groups{k(2)}]);
+			yticks(1:N.ROI); yticklabels(ROI{:,'Label'}); xticks([]);
 			pbaspect([1 1 1]);
 			
 			% Plot standard deviation
 			subplot(size(comps,1), 2, 2*c); colormap jet
 			imagesc(pdist2(squeeze(sEC(:,:,k(1))), squeeze(sEC(:,:,k(2))), mecDist)); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title(['Standard Deviation: ', condName{k(1)}, ' vs. ' condName{k(2)}]);
+			title(['Standard Deviation: ', groups{k(1)}, ' vs. ' groups{k(2)}]);
 			yticks([]); xticks([]);
 			pbaspect([1 1 1]);
 		end
 		sgtitle('Distances between Summary Statistics');
 
 		% Display mean distance between ECs
-		F(3) = figure;
+		F(numel(F)+1) = figure;
 		for c = 1:size(comps, 1)
 			k(1) = comps(c,1); k(2) = comps(c,2);
 			scomb = nchoosek(1:sum(N.subjects(k)), 2);
@@ -387,35 +396,35 @@ switch typeoffit
 			subplot(size(comps,1), 2, c); colormap jet
 			imagesc(mean(d, 3, 'omitnan')); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title(['Mean: ' condName{k(1)} ' vs. ' condName{k(2)}]);
-			yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
+			title(['Mean: ' groups{k(1)} ' vs. ' groups{k(2)}]);
+			yticks(1:N.ROI); yticklabels(ROI{:,'Label'}); xticks([]);
 			pbaspect([1 1 1]);
 			
 			% Plot standard deviation of distance
 			subplot(size(comps,1), 2, c+1); colormap jet
 			imagesc(std(d, 0, 3, 'omitnan')); colorbar;
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
-			title(['Standard Deviation: ' condName{k(1)} ' vs. ' condName{k(2)}]);
+			title(['Standard Deviation: ' groups{k(1)} ' vs. ' groups{k(2)}]);
 			yticks([]); xticks([]); pbaspect([1 1 1]);
 		end
 		sgtitle('Summary Statistics of Distances');
 		
 	case 'Group Mean'
 		% Display mean EC for each condition
-		F(1) = figure;
+		F(numel(F)+1) = figure;
 		for c = 1:N.conditions
 			subplot(1, N.conditions, c);
 			xlim([1 N.ROI]); ylim([1 N.ROI]);
 			colormap jet
 			imagesc(squeeze(EC(:,:,c))); colorbar;
-			title(['EC of ', condName{c}, ' Mean Entropy']);
-			yticks(1:N.ROI); yticklabels(labels_ROI);
+			title(['EC of ', groups{c}, ' Mean Entropy']);
+			yticks(1:N.ROI); yticklabels(ROI{:,'Label'});
 			pbaspect([1 1 1]);
 		end
 		clear c
 
 		% Display distance mean differences between ECs in each condition
-		F(2) = figure;
+		F(numel(F)+1) = figure;
 		for c = 1:size(comps, 1)
 			subplot(1, size(comps,1), c);
 			k(1) = comps(c,1); k(2) = comps(c,2);
@@ -425,27 +434,24 @@ switch typeoffit
 			colormap jet
 			imagesc(mdist); colorbar;
 			title(['Distance between Mean EC of Conditions ', num2str(k(1)), ' and ' num2str(k(2))]);
-			yticks(1:N.ROI); yticklabels(labels_ROI);
+			yticks(1:N.ROI); yticklabels(ROI{:,'Label'});
 			pbaspect([1 1 1]);
 		end
 end
 clear k s d c m
+savefig(F, fullfile(path{7}, fileName), 'compact');
 
 
 %% Strength Analysis
-
-% set color index
-cind.node = [1 0 0; 0 0 1];
-cind.conn = [1 0 1; 0 1 1];
 
 % Set strength index
 index = ["In", "Out"];
 
 % Run strength analysis
-[strength, vn] = netStrength(EC, I, comps, labels, labels_ROI, index, N);
+[strength, vn] = netStrength(EC, I, comps, groups, ROI{:,'Label'}, index, N);
 
 % Visualize strength results
-S = netStrengthVis(strength, comps, labels, I, labels_ROI, index, N, cind, vn);
+S = netStrengthVis(strength, comps, groups, I, ROI{:,'Label'}, index, N, cind, vn);
 clear vn
 
 % Add strength figures to F
@@ -456,6 +462,7 @@ clear s S
 
 % Save strength results
 save(fullfile(path{7}, fileName), 'strength', '-append');
+savefig(F, fullfile(path{7}, fileName), 'compact');
 
 
 %% NBS analysis
@@ -472,33 +479,48 @@ end
 tstat = 4:0.5:6;
 
 % Allocate contrast matrices
-cont = zeros((size(comps,1)+size(I,2))*2, size(I,2));
-strcont = cell((size(comps,1)+size(I,2))*2, 1);
+if size(comps,1) > 1
+    cont = zeros((size(comps,1)+size(I,2))*2, size(I,2));
+    strcont = cell((size(comps,1)+size(I,2))*2, 1);
 
-% Set all-way contrasts
-c = 2*(size(comps,1)+1:size(comps,1)+N.conditions);
-cont(c-1, :) = -ones(size(I,2), size(I,2)) + diag(2*ones(N.conditions,1));
-cont(c, :) = ones(size(I,2), size(I,2)) - diag(2*ones(N.conditions,1));
-for c = 2*(size(comps,1)+1:size(comps,1)+N.conditions)
-    strcont{c-1} = strjoin([labels((c-2*size(comps,1))/2), '> ALL']);
-    strcont{c} = strjoin([labels((c-2*size(comps,1))/2), '< ALL']);
+    % Set all-way contrasts
+    c = 2*(size(comps,1)+1:size(comps,1)+N.conditions);
+    cont(c-1, :) = -ones(size(I,2), size(I,2)) + diag(2*ones(N.conditions,1));
+    cont(c, :) = ones(size(I,2), size(I,2)) - diag(2*ones(N.conditions,1));
+    for c = 2*(size(comps,1)+1:size(comps,1)+N.conditions)
+        strcont{c-1} = strjoin([groups((c-2*size(comps,1))/2), '> ALL']);
+        strcont{c} = strjoin([groups((c-2*size(comps,1))/2), '< ALL']);
+    end
+else
+    cont = zeros(size(comps,1)*2, size(I,2));
+    strcont = cell(size(comps,1)*2, 1);
 end
 
 % Set pairwise contrasts
 for c = 2*(1:size(comps,1))
     cont(c-1, comps(c/2,:)) = [1 -1];
     cont(c, comps(c/2,:)) = [-1 1];
-    strcont{c-1} = strjoin([labels(comps(c/2,1)), '>', labels(comps(c/2,2))]);
-    strcont{c} = strjoin([labels(comps(c/2,1)), '<', labels(comps(c/2,2))]);
+    strcont{c-1} = strjoin([groups(comps(c/2,1)), '>', groups(comps(c/2,2))]);
+    strcont{c} = strjoin([groups(comps(c/2,1)), '<', groups(comps(c/2,2))]);
 end
-
-% Set subplot dimensions
-fInds{1} = [2 4];
-fInds{2} = 1;
-fInds{3} = 3;
 
 % Run NBS analysis
 [nbs, STATS, GLM, storarray] = runNBS(EC, cont, I, N, tstat);
+nbsNames = nbsNames(nbs, ROI{:,'Full'});      % get names of nodes in significant components
+
+% Save results
+save(fullfile(path{7}, fileName), 'h','mEC','sEC','nbs','storarray','nbsNames','strength', '-append');
+
+
+%% Visualize NBS networks
+
+% Set subplot dimensions
+fInds{1} = 1;
+fInds{2} = 2;
+
+% Figure dimensions
+fDim = [0 256 1240 768; 0 0 1240 512];
+fPan = [1 2];
 
 % Find results with paired contrasts
 pair = findseq(storarray, 2);
@@ -508,27 +530,21 @@ sing = findseq(storarray, 1);
 sing(ismember(sing, pair, 'rows'),:) = [];
 
 % Visualize paired NBS results
-NBS{1} = layered(cortex, nbs(:,unique(pair(:,2))), memberships, tstat, ttype, h{strcmpi(spaces, space)}(ttype,:), pair(mod(pair(:,2),2)==1,:), N, cont(unique(pair(:,2)),:), cind, [2 2], fInds, coords_ROI, labels_ROI, origin, sphereScale, strcont, rdux);
+NBS{1} = layered(cortex, nbs(:,unique(pair(:,2))), memberships, h, pair(mod(pair(:,2),2)==1,:), N, cont(unique(pair(:,2)),:), cind, fPan, fDim, fInds, ROI, origin, strcont);
 NBS{1} = NBS{1}(isgraphics(NBS{1}));
 
 % Visualize unpaired NBS results
-NBS{2} = singlefig(cortex, nbs, memberships, tstat, ttype, h{strcmpi(spaces, space)}(ttype,:), sing, N, cont, cind, [2 2], fInds, coords_ROI, labels_ROI, origin, sphereScale, strcont, rdux);
+NBS{2} = singlefig(cortex, nbs, memberships, h, sing, N, cont, cind, fPan, fDim, fInds, ROI, origin, strcont);
 NBS{2} = NBS{2}(isgraphics(NBS{2}));
 
 % Add NBS figures to F
 for s = 1:numel(NBS)
-    for n = 1:numel(NBS)
+    for n = 1:numel(NBS{s})
         F(numel(F)+1) = NBS{s}(n);
     end
 end
 clear n s NBS c
 
-
-%% Save results
-
 % Save figure
-savefig(F, fullfile(path{7}, typeoffit(~isspace(typeoffit)), fileName), 'compact');
+savefig(F, fullfile(path{7}, fileName), 'compact');
 clear F
-
-% Save results
-save(fullfile(path{7}, fileName), 'h','mEC','sEC','nbs','strength','storarray', '-append');

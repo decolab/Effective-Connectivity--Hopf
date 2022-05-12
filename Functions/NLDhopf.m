@@ -42,29 +42,35 @@ projection =  W*dFC;
 % Compute cost function
 switch cfType
 	case 'ksActive'			% mean KS distance between activation distributions
-		ksdist = nan(N.comp, 1);
-		for ass = 1:N.comp
+		ksdist = nan(N.IC, 1);
+		for ass = 1:N.IC
 			[~, ~, ksdist(ass)] = kstest2(activation(ass,:), projection(ass,:));
 		end
 		fval = mean(ksdist);
 	case 'entroSum'			% Use difference between sum of entropies as cost function
-		entroSim = nan(N.comp, 1);
-		for ass = 1:N.comp
+		entroSim = nan(N.IC, 1);
+		for ass = 1:N.IC
 			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
 		end
 		fval = sum([ent entroSim], 1, 'omitnan');
 		fval = abs(fval(1) - fval(2));
 	case 'eucEntro'			% Use Euclidean distance between total entropies as cost function
-		entroSim = nan(N.comp, 1);
-		for ass = 1:N.comp
+		entroSim = nan(N.IC, 1);
+		for ass = 1:N.IC
 			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
 		end
 		entroSim = horzcat(ent, entroSim)';
 		fval = pdist(entroSim);
 	case 'ksEntro'			% Use KS distance between entropy distributions as cost function
-		entroSim = nan(N.comp, 1);
-		for ass = 1:N.comp
+		entroSim = nan(N.IC, 1);
+		for ass = 1:N.IC
 			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
 		end
 		[~, ~, fval] = kstest2(ent, entroSim);
+	case 'maxEntro'			% Use maximum difference between individual elements as cost function
+		entroSim = nan(N.IC, 1);
+		for ass = 1:N.IC
+			entroSim(ass) = HShannon_kNN_k_estimation(projection(ass,:), co);
+		end
+		fval = max(abs(ent-entroSim));
 end
